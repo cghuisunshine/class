@@ -86,6 +86,15 @@
     }
     .menu.active{display:block}
     .menu button{display:block;width:100%;text-align:left;margin:6px 0}
+    .menu hr{border:none;border-top:1px solid var(--line);margin:8px 0}
+    .fileInputHidden{
+      position:fixed;
+      top:-10000px;
+      left:-10000px;
+      width:1px;
+      height:1px;
+      opacity:0;
+    }
     .menuBackdrop{
       display:none;
       position:fixed;
@@ -199,7 +208,7 @@
   <div class="titleRow">
     <div>
       <h1>Class Record Form</h1>
-      <div class="sub">Single-page HTML • autosaves to <span class="mono">localStorage</span> • editable like a spreadsheet</div>
+
     </div>
     <div class="headerRight">
       <div class="pill" id="saveStatus" title="Local autosave status">
@@ -209,6 +218,13 @@
       <button class="hamburger noPrint" id="hamburgerBtn" title="Menu">☰</button>
       <div class="menuBackdrop noPrint" id="menuBackdrop"></div>
       <div class="menu noPrint" id="menu">
+        <button class="danger" id="clearBtn" title="Clears all rows">Clear all</button>
+        <button id="exportJsonBtn">Export JSON</button>
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="shareBtn" title="Share or copy as CSV">Share CSV</button>
+        <button id="importJsonBtn">Import JSON…</button>
+        <button id="printBtn">Print</button>
+        <hr />
         <button id="firebaseSetupBtn">Firebase Setup</button>
         <button id="shareLinkBtn">Share Link</button>
       </div>
@@ -221,8 +237,6 @@
     <div class="toolbar noPrint">
       <div class="group">
         <button class="primary" id="addRowBtn">+ Add row</button>
-        <button id="add10Btn">+10 rows</button>
-        <button class="danger" id="clearBtn" title="Clears all rows">Clear all</button>
       </div>
 
       <div class="group">
@@ -231,17 +245,6 @@
       </div>
 
       <div class="spacer"></div>
-
-      <div class="group">
-        <button class="secondary" id="exportJsonBtn">Export JSON</button>
-        <button id="exportCsvBtn">Export CSV</button>
-        <button id="shareBtn" title="Share or copy as CSV">Share CSV</button>
-        <label class="small">
-          Import JSON
-          <input type="file" id="importJsonFile" accept="application/json" />
-        </label>
-        <button id="printBtn">Print</button>
-      </div>
     </div>
 
     <div class="tableWrap">
@@ -353,6 +356,7 @@
   const hamburgerBtn = $("hamburgerBtn");
   const menu = $("menu");
   const menuBackdrop = $("menuBackdrop");
+  const importJsonBtn = $("importJsonBtn");
   const firebaseSetupBtn = $("firebaseSetupBtn");
   const shareLinkBtn = $("shareLinkBtn");
 
@@ -680,6 +684,11 @@
   });
 
   menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+
+  importJsonBtn.addEventListener("click", () => {
+    setMenuOpen(false);
+    $("importJsonFile")?.click();
+  });
 
   firebaseSetupBtn.addEventListener('click', () => {
     let apiKey = prompt("Enter your Firebase API Key:");
@@ -1143,13 +1152,12 @@
 
   // Wire UI
   $("addRowBtn").addEventListener("click", () => addRow(1));
-  $("add10Btn").addEventListener("click", () => addRow(10));
-  $("clearBtn").addEventListener("click", clearAll);
-  $("printBtn").addEventListener("click", () => window.print());
+  $("clearBtn").addEventListener("click", () => { setMenuOpen(false); clearAll(); });
+  $("printBtn").addEventListener("click", () => { setMenuOpen(false); window.print(); });
 
-  $("exportJsonBtn").addEventListener("click", exportJSON);
-  $("exportCsvBtn").addEventListener("click", exportCSV);
-  $("shareBtn").addEventListener("click", shareRecordsAsCSV);
+  $("exportJsonBtn").addEventListener("click", () => { setMenuOpen(false); exportJSON(); });
+  $("exportCsvBtn").addEventListener("click", () => { setMenuOpen(false); exportCSV(); });
+  $("shareBtn").addEventListener("click", () => { setMenuOpen(false); shareRecordsAsCSV(); });
 
   $("importJsonFile").addEventListener("change", (e) => {
     const file = e.target.files?.[0];
@@ -1173,6 +1181,8 @@
   setSaveStatus("saved");
 })();
 </script>
+
+<input type="file" id="importJsonFile" accept="application/json" class="fileInputHidden noPrint" />
 
 <datalist id="durationList">
   <option value="0:30"></option>
