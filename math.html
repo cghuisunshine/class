@@ -145,6 +145,7 @@
       <div class="group">
         <button class="secondary" id="exportJsonBtn">Export JSON</button>
         <button id="exportCsvBtn">Export CSV</button>
+        <button id="shareBtn" title="Share or copy as text">Share text</button>
         <label class="small">
           Import JSON
           <input type="file" id="importJsonFile" accept="application/json" />
@@ -186,12 +187,14 @@
   const STORAGE_KEY = "classRecordForm.v1";
   const LAST_DURATION_KEY = "classRecordForm.v1.lastDuration";
   const LAST_TIME_KEY = "classRecordForm.v1.lastTime";
+  const LAST_SIGNATURE_KEY = "classRecordForm.v1.lastSignature";
 
   /** @type {Array<{id:string, date:string, content:string, duration:string, signature:string, notes:string}>} */
   let rows = [];
   let filterText = "";
   let lastDuration = "";
   let lastTime = "";
+  let lastSignature = "";
 
   const $ = (id) => document.getElementById(id);
 
@@ -228,6 +231,12 @@
 
     try{
       lastTime = normalizeTimeHHMM(localStorage.getItem(LAST_TIME_KEY));
+    }catch(e){
+      // ignore
+    }
+
+    try{
+      lastSignature = (localStorage.getItem(LAST_SIGNATURE_KEY) ?? "").toString().trim();
     }catch(e){
       // ignore
     }
@@ -282,6 +291,15 @@
     }
   }
 
+  function setLastSignature(v){
+    lastSignature = (v ?? "").toString().trim();
+    try{
+      localStorage.setItem(LAST_SIGNATURE_KEY, lastSignature);
+    }catch(e){
+      // ignore
+    }
+  }
+
   function normalize(s){ return (s || "").toString().toLowerCase().trim(); }
 
   function normalizeTimeHHMM(v){
@@ -295,13 +313,23 @@
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
+  function snapTimeTo30Min(v){
+    const s = normalizeTimeHHMM(v);
+    if(!s) return "";
+    const [hhStr, mmStr] = s.split(":");
+    const hh = Number(hhStr);
+    const mm = Number(mmStr);
+    const snappedMinutes = mm < 30 ? 0 : 30;
+    return `${String(hh).padStart(2, "0")}:${String(snappedMinutes).padStart(2, "0")}`;
+  }
+
   function currentTimeHHMM(){
     const d = new Date();
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
   function defaultDateTimeLocal(){
-    const time = lastTime || currentTimeHHMM();
+    const time = snapTimeTo30Min(lastTime || currentTimeHHMM()) || (lastTime || currentTimeHHMM());
     const d = new Date();
     const yyyy = String(d.getFullYear());
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -334,6 +362,103 @@
     const spaceSeparated = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
     if(spaceSeparated) return `${spaceSeparated[1]}T${spaceSeparated[2]}`;
     return s; // keep as-is for best effort; rendering will fall back to text input
+  }
+
+  function parseDateTimeLocalToDate(v){
+    const s = normalizeDateTimeLocal(v);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!m) return null;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const hh = Number(m[4]);
+    const min = Number(m[5]);
+    if(![yyyy, mm, dd, hh, min].every(Number.isFinite)) return null;
+    return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
+  }
+
+  function formatRowForShareText(row){
+    const d = parseDateTimeLocalToDate(row.date);
+    const when = d
+      ? d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : (row.date || "");
+
+    const parts = [];
+    if(row.duration) parts.push(`(${row.duration})`);
+    if(row.content) parts.push(row.content);
+    if(row.signature) parts.push(`— ${row.signature}`);
+    if(row.notes) parts.push(`— ${row.notes}`);
+
+    const suffix = parts.length ? ` ${parts.join(" ")}` : "";
+    return `- ${when}${suffix}`.trimEnd();
+  }
+
+  function buildShareText(){
+    const shown = rows.filter(passesFilter);
+    const now = new Date().toLocaleString();
+    const title = "Class Record";
+    const header = [
+      title,
+      `Generated: ${now}`,
+      filterText ? `Filter: ${filterText}` : null,
+      `Rows: ${shown.length}`,
+      ""
+    ].filter(Boolean);
+
+    const lines = shown.map(formatRowForShareText);
+    return header.concat(lines).join("\n");
+  }
+
+  async function copyToClipboard(text){
+    try{
+      if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(e){
+      // fall back
+    }
+
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.left = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    }catch(e){
+      return false;
+    }
+  }
+
+  async function shareRecordsAsText(){
+    const text = buildShareText();
+    if(!text.trim()){
+      alert("Nothing to share.");
+      return;
+    }
+
+    if(navigator.share){
+      try{
+        await navigator.share({ title: "Class Record", text });
+        return;
+      }catch(e){
+        // user cancelled or not supported in this context; fall back to copy
+      }
+    }
+
+    const copied = await copyToClipboard(text);
+    if(copied){
+      alert("Copied text to clipboard.");
+    } else {
+      alert("Sharing not available here. Please copy manually:\n\n" + text);
+    }
   }
 
   function normalizeDuration(v){
@@ -426,7 +551,7 @@
 
       if(supported){
         input.type = "datetime-local";
-        input.step = "60";
+        input.step = "1800";
         if(normalized === "" || /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.test(normalized)){
           input.value = normalized;
         } else {
@@ -462,6 +587,12 @@
       });
     }
 
+    if(field === "signature"){
+      input.addEventListener("blur", (e) => {
+        setLastSignature(e.target.value);
+      });
+    }
+
     // keep edits in data model
     input.addEventListener("input", (e) => {
       const tr = e.target.closest("tr");
@@ -473,6 +604,9 @@
 
       if(field === "date"){
         setLastTimeFromDateTimeLocal(e.target.value);
+      }
+      if(field === "signature"){
+        lastSignature = (e.target.value ?? "").toString().trim();
       }
     });
 
@@ -512,7 +646,14 @@
 
   function addRow(n=1){
     for(let i=0;i<n;i++){
-      rows.push({ id: uid(), date: defaultDateTimeLocal() || "", content:"", duration: lastDuration || "", signature:"", notes:"" });
+      rows.push({
+        id: uid(),
+        date: defaultDateTimeLocal() || "",
+        content: "",
+        duration: lastDuration || "",
+        signature: lastSignature || "",
+        notes: ""
+      });
     }
     scheduleSave();
     render();
@@ -614,6 +755,7 @@
 
   $("exportJsonBtn").addEventListener("click", exportJSON);
   $("exportCsvBtn").addEventListener("click", exportCSV);
+  $("shareBtn").addEventListener("click", shareRecordsAsText);
 
   $("importJsonFile").addEventListener("change", (e) => {
     const file = e.target.files?.[0];
