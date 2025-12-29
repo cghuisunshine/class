@@ -47,6 +47,8 @@
       width:100%;border:1px solid transparent;background:transparent;padding:6px 8px;border-radius:8px;font-size:13px
     }
     .cellInput:focus{outline:none;border-color:#c7d2fe;background:#fff}
+    .cellWrap{display:flex;flex-direction:column;gap:6px}
+    .dateHint{font-size:12px;color:var(--muted)}
     .mono{font-family:var(--mono)}
     .actions{display:flex;gap:6px;justify-content:flex-end}
     .pill{
@@ -97,6 +99,8 @@
         padding:10px 12px;
         font-size:15px;
       }
+      .cellWrap{gap:8px}
+      .dateHint{font-size:13px}
       .actions{justify-content:flex-start}
       .actions button{flex:1}
     }
@@ -145,7 +149,7 @@
       <div class="group">
         <button class="secondary" id="exportJsonBtn">Export JSON</button>
         <button id="exportCsvBtn">Export CSV</button>
-        <button id="shareBtn" title="Share or copy as text">Share text</button>
+        <button id="shareBtn" title="Share or copy as CSV">Share CSV</button>
         <label class="small">
           Import JSON
           <input type="file" id="importJsonFile" accept="application/json" />
@@ -188,6 +192,7 @@
   const LAST_DURATION_KEY = "classRecordForm.v1.lastDuration";
   const LAST_TIME_KEY = "classRecordForm.v1.lastTime";
   const LAST_SIGNATURE_KEY = "classRecordForm.v1.lastSignature";
+  const LAST_CONTENT_KEY = "classRecordForm.v1.lastContent";
 
   /** @type {Array<{id:string, date:string, content:string, duration:string, signature:string, notes:string}>} */
   let rows = [];
@@ -195,6 +200,7 @@
   let lastDuration = "";
   let lastTime = "";
   let lastSignature = "";
+  let lastContent = "";
 
   const $ = (id) => document.getElementById(id);
 
@@ -237,6 +243,12 @@
 
     try{
       lastSignature = (localStorage.getItem(LAST_SIGNATURE_KEY) ?? "").toString().trim();
+    }catch(e){
+      // ignore
+    }
+
+    try{
+      lastContent = (localStorage.getItem(LAST_CONTENT_KEY) ?? "").toString();
     }catch(e){
       // ignore
     }
@@ -300,6 +312,15 @@
     }
   }
 
+  function setLastContent(v){
+    lastContent = (v ?? "").toString();
+    try{
+      localStorage.setItem(LAST_CONTENT_KEY, lastContent);
+    }catch(e){
+      // ignore
+    }
+  }
+
   function normalize(s){ return (s || "").toString().toLowerCase().trim(); }
 
   function normalizeTimeHHMM(v){
@@ -329,7 +350,7 @@
   }
 
   function defaultDateTimeLocal(){
-    const time = snapTimeTo30Min(lastTime || currentTimeHHMM()) || (lastTime || currentTimeHHMM());
+    const time = lastTime || snapTimeTo30Min(currentTimeHHMM()) || currentTimeHHMM();
     const d = new Date();
     const yyyy = String(d.getFullYear());
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -377,36 +398,23 @@
     return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
   }
 
-  function formatRowForShareText(row){
-    const d = parseDateTimeLocalToDate(row.date);
-    const when = d
-      ? d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-      : (row.date || "");
-
-    const parts = [];
-    if(row.duration) parts.push(`(${row.duration})`);
-    if(row.content) parts.push(row.content);
-    if(row.signature) parts.push(`— ${row.signature}`);
-    if(row.notes) parts.push(`— ${row.notes}`);
-
-    const suffix = parts.length ? ` ${parts.join(" ")}` : "";
-    return `- ${when}${suffix}`.trimEnd();
+  function formatDateTimeLocalFromDate(d){
+    const yyyy = String(d.getFullYear());
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
   }
 
-  function buildShareText(){
+  function buildShareCSV(){
     const shown = rows.filter(passesFilter);
-    const now = new Date().toLocaleString();
-    const title = "Class Record";
-    const header = [
-      title,
-      `Generated: ${now}`,
-      filterText ? `Filter: ${filterText}` : null,
-      `Rows: ${shown.length}`,
-      ""
-    ].filter(Boolean);
-
-    const lines = shown.map(formatRowForShareText);
-    return header.concat(lines).join("\n");
+    const header = ["Date","Content","Duration","Signature","Notes"];
+    const lines = [header.join(",")];
+    for(const r of shown){
+      lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
+    }
+    return lines.join("\n");
   }
 
   async function copyToClipboard(text){
@@ -437,27 +445,27 @@
     }
   }
 
-  async function shareRecordsAsText(){
-    const text = buildShareText();
-    if(!text.trim()){
+  async function shareRecordsAsCSV(){
+    const csv = buildShareCSV();
+    if(!csv.trim()){
       alert("Nothing to share.");
       return;
     }
 
     if(navigator.share){
       try{
-        await navigator.share({ title: "Class Record", text });
+        await navigator.share({ title: "class-record.csv", text: csv });
         return;
       }catch(e){
         // user cancelled or not supported in this context; fall back to copy
       }
     }
 
-    const copied = await copyToClipboard(text);
+    const copied = await copyToClipboard(csv);
     if(copied){
-      alert("Copied text to clipboard.");
+      alert("Copied CSV to clipboard.");
     } else {
-      alert("Sharing not available here. Please copy manually:\n\n" + text);
+      alert("Sharing not available here. Please copy manually:\n\n" + csv);
     }
   }
 
@@ -544,6 +552,16 @@
     input.spellcheck = false;
 
     if(field === "date"){
+      const wrap = document.createElement("div");
+      wrap.className = "cellWrap";
+      const hint = document.createElement("div");
+      hint.className = "dateHint";
+
+      const updateHint = () => {
+        const d = parseDateTimeLocalToDate(input.value);
+        hint.textContent = d ? d.toLocaleDateString(undefined, { weekday: "short" }) : "";
+      };
+
       const normalized = normalizeDateTimeLocal(input.value);
       const probe = document.createElement("input");
       probe.type = "datetime-local";
@@ -563,7 +581,15 @@
 
       input.addEventListener("blur", (e) => {
         setLastTimeFromDateTimeLocal(e.target.value);
+        updateHint();
       });
+      input.addEventListener("input", updateHint);
+      updateHint();
+
+      wrap.appendChild(input);
+      wrap.appendChild(hint);
+      td.appendChild(wrap);
+      return td;
     }
 
     if(field === "duration"){
@@ -587,6 +613,12 @@
       });
     }
 
+    if(field === "content"){
+      input.addEventListener("blur", (e) => {
+        setLastContent(e.target.value);
+      });
+    }
+
     if(field === "signature"){
       input.addEventListener("blur", (e) => {
         setLastSignature(e.target.value);
@@ -604,6 +636,9 @@
 
       if(field === "date"){
         setLastTimeFromDateTimeLocal(e.target.value);
+      }
+      if(field === "content"){
+        lastContent = (e.target.value ?? "").toString();
       }
       if(field === "signature"){
         lastSignature = (e.target.value ?? "").toString().trim();
@@ -649,7 +684,7 @@
       rows.push({
         id: uid(),
         date: defaultDateTimeLocal() || "",
-        content: "",
+        content: lastContent || "",
         duration: lastDuration || "",
         signature: lastSignature || "",
         notes: ""
@@ -669,7 +704,13 @@
     const idx = rows.findIndex(r => r.id === id);
     if(idx < 0) return;
     const src = rows[idx];
-    const copy = { ...src, id: uid() };
+    let date = src.date;
+    const d = parseDateTimeLocalToDate(src.date);
+    if(d){
+      d.setDate(d.getDate() + 7);
+      date = formatDateTimeLocalFromDate(d);
+    }
+    const copy = { ...src, id: uid(), date };
     rows.splice(idx + 1, 0, copy);
     scheduleSave();
     render();
@@ -755,7 +796,7 @@
 
   $("exportJsonBtn").addEventListener("click", exportJSON);
   $("exportCsvBtn").addEventListener("click", exportCSV);
-  $("shareBtn").addEventListener("click", shareRecordsAsText);
+  $("shareBtn").addEventListener("click", shareRecordsAsCSV);
 
   $("importJsonFile").addEventListener("change", (e) => {
     const file = e.target.files?.[0];
