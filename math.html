@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Class Record Form (LocalStorage • Single Page)</title>
+  <!-- Firebase SDKs (optional sync; uses same setup as post.html) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <style>
     :root{
       --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
@@ -55,6 +58,32 @@
       display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
       background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;color:#374151
     }
+    .headerRight{display:flex;align-items:center;gap:10px;position:relative}
+    .hamburger{
+      font-size:18px;
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:8px 10px;
+      cursor:pointer;
+      line-height:1;
+    }
+    .menu{
+      display:none;
+      position:absolute;
+      top:100%;
+      right:0;
+      margin-top:8px;
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      z-index:1000;
+      min-width:180px;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+    }
+    .menu.active{display:block}
+    .menu button{display:block;width:100%;text-align:left;margin:6px 0}
     .dot{width:8px;height:8px;border-radius:50%}
     .dot.ok{background:var(--ok)} .dot.warn{background:#d97706}
     .footer{
@@ -123,9 +152,16 @@
       <h1>Class Record Form</h1>
       <div class="sub">Single-page HTML • autosaves to <span class="mono">localStorage</span> • editable like a spreadsheet</div>
     </div>
-    <div class="pill" id="saveStatus" title="Local autosave status">
-      <span class="dot ok" id="saveDot"></span>
-      <span id="saveText">Saved</span>
+    <div class="headerRight">
+      <div class="pill" id="saveStatus" title="Local autosave status">
+        <span class="dot ok" id="saveDot"></span>
+        <span id="saveText">Saved</span>
+      </div>
+      <button class="hamburger noPrint" id="hamburgerBtn" title="Menu">☰</button>
+      <div class="menu noPrint" id="menu">
+        <button id="firebaseSetupBtn">Firebase Setup</button>
+        <button id="shareLinkBtn">Share Link</button>
+      </div>
     </div>
   </div>
 </header>
@@ -188,6 +224,58 @@
 
 <script>
 (() => {
+  /*******************************************
+   * 1. Firebase Initialization (if API Key exists)
+   *******************************************/
+  let firebaseConfigured = false;
+  let db = null;
+  let remoteSeen = false;
+  let applyingRemoteSnapshot = false;
+
+  // Function to get URL parameters
+  function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    var results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+  };
+
+  // 1. Check for API key in URL parameter first
+  let apiKeyFromUrl = getUrlParameter('apiKey');
+  let firebaseApiKeyToUse = null;
+
+  if (apiKeyFromUrl) {
+    console.log("Found API key in URL parameter.");
+    firebaseApiKeyToUse = apiKeyFromUrl;
+    localStorage.setItem('firebaseApiKey', firebaseApiKeyToUse);
+  } else {
+    firebaseApiKeyToUse = localStorage.getItem('firebaseApiKey');
+    if (firebaseApiKeyToUse) {
+      console.log("Using API key from localStorage.");
+    }
+  }
+
+  // 3. Initialize Firebase if we have an API key
+  if (firebaseApiKeyToUse) {
+    const firebaseConfig = {
+      apiKey: firebaseApiKeyToUse,
+      authDomain: "homeinventory-4718c.firebaseapp.com",
+      projectId: "homeinventory-4718c",
+      storageBucket: "homeinventory-4718c.firebasestorage.app",
+      messagingSenderId: "719884896213",
+      appId: "1:719884896213:web:e93d5dffc79dec10995f5c"
+    };
+
+    if (window.firebase?.initializeApp && window.firebase?.firestore) {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      firebaseConfigured = true;
+      console.log("Firebase initialized for Class Record Form");
+    } else {
+      console.warn("Firebase API key found, but Firebase SDK didn't load; running without sync.");
+    }
+  }
+
   const STORAGE_KEY = "classRecordForm.v1";
   const LAST_DURATION_KEY = "classRecordForm.v1.lastDuration";
   const LAST_TIME_KEY = "classRecordForm.v1.lastTime";
@@ -211,6 +299,26 @@
 
   const saveDot = $("saveDot");
   const saveText = $("saveText");
+  const hamburgerBtn = $("hamburgerBtn");
+  const menu = $("menu");
+  const firebaseSetupBtn = $("firebaseSetupBtn");
+  const shareLinkBtn = $("shareLinkBtn");
+
+  const remoteDocRef = (firebaseConfigured && db)
+    ? db.collection("classRecordForm").doc("v1")
+    : null;
+
+  function sanitizeRows(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(x => ({
+      id: (x?.id && typeof x.id === "string") ? x.id : uid(),
+      date: normalizeDateTimeLocal(x?.date),
+      content: (x?.content ?? "").toString(),
+      duration: (x?.duration ?? "").toString(),
+      signature: (x?.signature ?? "").toString(),
+      notes: (x?.notes ?? "").toString(),
+    }));
+  }
 
   function uid(){
     // good-enough unique id for local storage
@@ -225,6 +333,15 @@
     } else {
       saveDot.className = "dot ok";
       saveText.textContent = "Saved";
+    }
+  }
+
+  function saveLocalOnly(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+      setSaveStatus("saved");
+    }catch(e){
+      console.error("Failed to save:", e);
     }
   }
 
@@ -272,16 +389,26 @@
     if(rows.length === 0){
       // start empty (no example/template rows)
       rows = [];
-      save();
+      saveLocalOnly();
     }
   }
 
   function save(){
-    try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
-      setSaveStatus("saved");
-    }catch(e){
-      console.error("Failed to save:", e);
+    saveLocalOnly();
+
+    if(firebaseConfigured && db && remoteDocRef && remoteSeen && !applyingRemoteSnapshot){
+      remoteDocRef.set({
+        rows,
+        lastDuration,
+        lastTime,
+        lastSignature,
+        lastContent,
+        updatedAt: new Date().toISOString()
+      }).then(() => {
+        // ok
+      }).catch((error) => {
+        console.error("Failed to save to Firebase:", error);
+      });
     }
   }
 
@@ -467,6 +594,93 @@
     } else {
       alert("Sharing not available here. Please copy manually:\n\n" + csv);
     }
+  }
+
+  /*******************************************
+   * 2. Firebase UI + Realtime Sync
+   *******************************************/
+  hamburgerBtn.addEventListener('click', () => {
+    menu.classList.toggle('active');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!menu.contains(e.target) && e.target !== hamburgerBtn) {
+      menu.classList.remove('active');
+    }
+  });
+
+  firebaseSetupBtn.addEventListener('click', () => {
+    let apiKey = prompt("Enter your Firebase API Key:");
+    if (apiKey) {
+      localStorage.setItem('firebaseApiKey', apiKey);
+      alert("Firebase API key saved. Please refresh the page to initialize Firebase.");
+    }
+    menu.classList.remove('active');
+  });
+
+  // Share link functionality: share the page link with the firebase API key as a parameter (if available)
+  shareLinkBtn.addEventListener('click', () => {
+    let firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    let baseURL = window.location.origin + window.location.pathname;
+    let shareURL = firebaseApiKey ? `${baseURL}?apiKey=${encodeURIComponent(firebaseApiKey)}` : baseURL;
+
+    if (navigator.share) {
+      navigator.share({
+        title: 'Class Record Form',
+        text: 'Check out this class record form!',
+        url: shareURL
+      }).then(() => console.log('Share successful'))
+      .catch(error => console.error('Error sharing:', error));
+    } else {
+      prompt('Copy this link:', shareURL);
+    }
+    menu.classList.remove('active');
+  });
+
+  if(firebaseConfigured && db && remoteDocRef){
+    remoteDocRef.onSnapshot((doc) => {
+      remoteSeen = true;
+
+      if(doc.exists){
+        const data = doc.data() || {};
+        if(data?.rows && Array.isArray(data.rows)){
+          applyingRemoteSnapshot = true;
+          rows = sanitizeRows(data.rows).map((r) => ({ ...r, date: normalizeDateTimeLocal(r?.date) }));
+
+          lastDuration = normalizeDuration(data?.lastDuration) || lastDuration;
+          lastTime = normalizeTimeHHMM(data?.lastTime) || lastTime;
+          lastSignature = (data?.lastSignature ?? "").toString().trim() || lastSignature;
+          lastContent = (data?.lastContent ?? "").toString() || lastContent;
+
+          try{ localStorage.setItem(LAST_DURATION_KEY, lastDuration); }catch(e){}
+          try{ localStorage.setItem(LAST_TIME_KEY, lastTime); }catch(e){}
+          try{ localStorage.setItem(LAST_SIGNATURE_KEY, lastSignature); }catch(e){}
+          try{ localStorage.setItem(LAST_CONTENT_KEY, lastContent); }catch(e){}
+
+          saveLocalOnly();
+          render();
+          applyingRemoteSnapshot = false;
+          console.log("Records loaded/updated from Firebase in real-time");
+        }
+      } else {
+        // Seed Firestore once from local data if remote doc doesn't exist yet
+        if(!applyingRemoteSnapshot && (rows.length > 0 || lastDuration || lastTime || lastSignature || lastContent)){
+          remoteDocRef.set({
+            rows,
+            lastDuration,
+            lastTime,
+            lastSignature,
+            lastContent,
+            updatedAt: new Date().toISOString()
+          }).catch((error) => console.error("Failed to initialize Firebase doc:", error));
+        }
+      }
+    }, (error) => {
+      console.error("Error in real-time listener:", error);
+      remoteSeen = true;
+    });
+  } else {
+    remoteSeen = true;
   }
 
   function normalizeDuration(v){
