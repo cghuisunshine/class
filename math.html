@@ -146,7 +146,6 @@
   const STORAGE_KEY = "classRecordForm.v1";
   const LAST_DURATION_KEY = "classRecordForm.v1.lastDuration";
   const LAST_TIME_KEY = "classRecordForm.v1.lastTime";
-  const DEFAULT_ROWS = 12;
 
   /** @type {Array<{id:string, date:string, content:string, duration:string, signature:string, notes:string}>} */
   let rows = [];
@@ -210,16 +209,9 @@
     }));
 
     if(rows.length === 0){
-      // start with blank rows like a paper sheet
-      rows = Array.from({length: DEFAULT_ROWS}, () => ({
-        id: uid(),
-        date: defaultDateTimeLocal() || "",
-        content: "",
-        duration: lastDuration || "",
-        signature: "",
-        notes: ""
-      }));
-      save(); // persist initial template
+      // start empty (no example/template rows)
+      rows = [];
+      save();
     }
   }
 
@@ -510,9 +502,7 @@
 
   function clearAll(){
     if(!confirm("Clear ALL rows? This cannot be undone.")) return;
-    rows = Array.from({length: DEFAULT_ROWS}, () => ({
-      id: uid(), date: defaultDateTimeLocal() || "", content:"", duration: lastDuration || "", signature:"", notes:""
-    }));
+    rows = [];
     scheduleSave();
     render();
   }
