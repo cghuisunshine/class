@@ -60,6 +60,46 @@
       padding:12px;border-top:1px solid var(--line)
     }
     .hidden{display:none !important}
+    @media (max-width: 720px){
+      header{padding:14px 12px 8px}
+      .wrap{padding:0 12px 18px}
+      .toolbar{gap:8px;padding:10px}
+      button{padding:10px 12px;font-size:14px;border-radius:12px}
+      input, textarea, select{padding:10px 12px;font-size:14px;border-radius:12px}
+      input[type="file"]{padding:8px}
+      .tableWrap{overflow:visible;border-top:none}
+      table{min-width:0}
+      thead{display:none}
+      tbody, tbody tr, tbody td{display:block;width:100%}
+      tbody tr{
+        margin:12px 0;
+        border:1px solid var(--line);
+        border-radius:12px;
+        background:#fff;
+        overflow:hidden;
+      }
+      tbody td{
+        border:none;
+        border-top:1px solid var(--line);
+        padding:10px 12px;
+      }
+      tbody td:first-child{border-top:none}
+      tbody td::before{
+        content:attr(data-label);
+        display:block;
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:6px;
+      }
+      .cellInput{
+        border:1px solid var(--line);
+        background:#fff;
+        padding:10px 12px;
+        font-size:15px;
+      }
+      .actions{justify-content:flex-start}
+      .actions button{flex:1}
+    }
     @media print{
       body{background:#fff}
       header,.toolbar,.footer,.noPrint{display:none !important}
@@ -325,15 +365,16 @@
       const tr = document.createElement("tr");
       tr.dataset.id = row.id;
 
-      tr.appendChild(makeCell("date", row.date, "Pick date & time"));
-      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework"));
-      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30"));
-      tr.appendChild(makeCell("signature", row.signature, "Name / initials"));
-      tr.appendChild(makeCell("notes", row.notes, "Payment / comments"));
+      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time"));
+      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content"));
+      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)"));
+      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature"));
+      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes"));
 
       const tdActions = document.createElement("td");
       tdActions.style.textAlign = "right";
       tdActions.className = "noPrint";
+      tdActions.dataset.label = "Actions";
 
       const wrap = document.createElement("div");
       wrap.className = "actions";
@@ -366,12 +407,14 @@
     }
   }
 
-  function makeCell(field, value, placeholder){
+  function makeCell(field, value, placeholder, label){
     const td = document.createElement("td");
+    td.dataset.label = label;
     const input = document.createElement("input");
     input.className = "cellInput";
     input.value = value ?? "";
     input.placeholder = placeholder;
+    input.setAttribute("aria-label", label);
     input.autocomplete = "off";
     input.spellcheck = false;
 
