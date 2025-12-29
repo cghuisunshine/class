@@ -70,20 +70,60 @@
     }
     .menu{
       display:none;
-      position:absolute;
-      top:100%;
-      right:0;
-      margin-top:8px;
+      position:fixed;
+      left:50%;
+      top:50%;
+      transform:translate(-50%, -50%);
       background:#fff;
       border:1px solid var(--line);
       border-radius:12px;
       padding:8px;
       z-index:1000;
-      min-width:180px;
+      width:min(92vw, 360px);
+      max-height:80vh;
+      overflow:auto;
       box-shadow:0 10px 30px rgba(0,0,0,.08);
     }
     .menu.active{display:block}
     .menu button{display:block;width:100%;text-align:left;margin:6px 0}
+    .menuBackdrop{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:999;
+    }
+    .menuBackdrop.active{display:block}
+    .detailsToggle{
+      display:none;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .iconBtn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:36px;
+      height:36px;
+      padding:0;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      border-radius:10px;
+      cursor:pointer;
+      flex:0 0 auto;
+    }
+    .iconBtn svg{width:18px;height:18px;display:block}
+    .iconBtn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+    .iconBtn.danger svg{stroke:#fff}
+    .dateTopRow{display:flex;align-items:center;gap:8px}
+    .dateTopRow .cellInput{flex:1;min-width:0}
+    .dateTopActions{display:none;align-items:center;gap:6px}
     .dot{width:8px;height:8px;border-radius:50%}
     .dot.ok{background:var(--ok)} .dot.warn{background:#d97706}
     .footer{
@@ -132,6 +172,15 @@
       .dateHint{font-size:13px}
       .actions{justify-content:flex-start}
       .actions button{flex:1}
+      .iconBtn{width:32px;height:32px;border-radius:12px}
+      .dateTopRow{gap:6px}
+      .dateTopActions{gap:4px}
+
+      /* Mobile folding: show only Date & Time (and Actions) by default */
+      tbody tr:not(.expanded) td[data-field]{display:none}
+      tbody tr:not(.expanded) td[data-field="date"]{display:block}
+      td[data-field="actions"]{display:none}
+      .dateTopActions{display:flex}
     }
     @media print{
       body{background:#fff}
@@ -158,6 +207,7 @@
         <span id="saveText">Saved</span>
       </div>
       <button class="hamburger noPrint" id="hamburgerBtn" title="Menu">☰</button>
+      <div class="menuBackdrop noPrint" id="menuBackdrop"></div>
       <div class="menu noPrint" id="menu">
         <button id="firebaseSetupBtn">Firebase Setup</button>
         <button id="shareLinkBtn">Share Link</button>
@@ -289,6 +339,7 @@
   let lastTime = "";
   let lastSignature = "";
   let lastContent = "";
+  const expandedRowIds = new Set();
 
   const $ = (id) => document.getElementById(id);
 
@@ -301,12 +352,31 @@
   const saveText = $("saveText");
   const hamburgerBtn = $("hamburgerBtn");
   const menu = $("menu");
+  const menuBackdrop = $("menuBackdrop");
   const firebaseSetupBtn = $("firebaseSetupBtn");
   const shareLinkBtn = $("shareLinkBtn");
 
   const remoteDocRef = (firebaseConfigured && db)
     ? db.collection("classRecordForm").doc("v1")
     : null;
+
+  const ICONS = {
+    chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    chevronUp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>',
+    duplicate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+  };
+
+  function makeIconBtn({ title, ariaLabel, iconSvg, className = "", onClick }){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `iconBtn ${className}`.trim();
+    btn.title = title;
+    btn.setAttribute("aria-label", ariaLabel);
+    btn.innerHTML = iconSvg;
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
 
   function sanitizeRows(arr){
     if(!Array.isArray(arr)) return [];
@@ -599,15 +669,17 @@
   /*******************************************
    * 2. Firebase UI + Realtime Sync
    *******************************************/
+  function setMenuOpen(isOpen){
+    menu.classList.toggle('active', isOpen);
+    menuBackdrop.classList.toggle('active', isOpen);
+  }
+
   hamburgerBtn.addEventListener('click', () => {
-    menu.classList.toggle('active');
+    const open = !menu.classList.contains('active');
+    setMenuOpen(open);
   });
 
-  document.addEventListener('click', (e) => {
-    if (!menu.contains(e.target) && e.target !== hamburgerBtn) {
-      menu.classList.remove('active');
-    }
-  });
+  menuBackdrop.addEventListener('click', () => setMenuOpen(false));
 
   firebaseSetupBtn.addEventListener('click', () => {
     let apiKey = prompt("Enter your Firebase API Key:");
@@ -615,7 +687,7 @@
       localStorage.setItem('firebaseApiKey', apiKey);
       alert("Firebase API key saved. Please refresh the page to initialize Firebase.");
     }
-    menu.classList.remove('active');
+    setMenuOpen(false);
   });
 
   // Share link functionality: share the page link with the firebase API key as a parameter (if available)
@@ -634,7 +706,7 @@
     } else {
       prompt('Copy this link:', shareURL);
     }
-    menu.classList.remove('active');
+    setMenuOpen(false);
   });
 
   if(firebaseConfigured && db && remoteDocRef){
@@ -711,14 +783,16 @@
     for(const row of shown){
       const tr = document.createElement("tr");
       tr.dataset.id = row.id;
+      if(expandedRowIds.has(row.id)) tr.classList.add("expanded");
 
-      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time"));
-      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content"));
-      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)"));
-      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature"));
-      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes"));
+      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time", row.id));
+      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content", row.id));
+      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)", row.id));
+      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature", row.id));
+      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes", row.id));
 
       const tdActions = document.createElement("td");
+      tdActions.dataset.field = "actions";
       tdActions.style.textAlign = "right";
       tdActions.className = "noPrint";
       tdActions.dataset.label = "Actions";
@@ -726,16 +800,26 @@
       const wrap = document.createElement("div");
       wrap.className = "actions";
 
-      const dupBtn = document.createElement("button");
-      dupBtn.textContent = "Duplicate";
-      dupBtn.title = "Duplicate this row";
-      dupBtn.addEventListener("click", () => duplicateRow(row.id));
+      const dupBtn = makeIconBtn({
+        title: "Duplicate",
+        ariaLabel: "Duplicate row",
+        iconSvg: ICONS.duplicate,
+        onClick: (e) => {
+          e.preventDefault();
+          duplicateRow(row.id);
+        }
+      });
 
-      const delBtn = document.createElement("button");
-      delBtn.textContent = "Delete";
-      delBtn.className = "danger";
-      delBtn.title = "Delete this row";
-      delBtn.addEventListener("click", () => deleteRow(row.id));
+      const delBtn = makeIconBtn({
+        title: "Delete",
+        ariaLabel: "Delete row",
+        iconSvg: ICONS.trash,
+        className: "danger",
+        onClick: (e) => {
+          e.preventDefault();
+          deleteRow(row.id);
+        }
+      });
 
       wrap.appendChild(dupBtn);
       wrap.appendChild(delBtn);
@@ -754,8 +838,9 @@
     }
   }
 
-  function makeCell(field, value, placeholder, label){
+  function makeCell(field, value, placeholder, label, rowId){
     const td = document.createElement("td");
+    td.dataset.field = field;
     td.dataset.label = label;
     const input = document.createElement("input");
     input.className = "cellInput";
@@ -768,6 +853,8 @@
     if(field === "date"){
       const wrap = document.createElement("div");
       wrap.className = "cellWrap";
+      const topRow = document.createElement("div");
+      topRow.className = "dateTopRow";
       const hint = document.createElement("div");
       hint.className = "dateHint";
 
@@ -800,7 +887,57 @@
       input.addEventListener("input", updateHint);
       updateHint();
 
-      wrap.appendChild(input);
+      const actions = document.createElement("div");
+      actions.className = "dateTopActions noPrint";
+
+      const detailsBtn = makeIconBtn({
+        title: "Show/Hide details",
+        ariaLabel: "Show or hide details",
+        iconSvg: expandedRowIds.has(rowId) ? ICONS.chevronUp : ICONS.chevronDown,
+        onClick: (e) => {
+          e.preventDefault();
+          const tr = e.target.closest("tr");
+          const id = tr?.dataset?.id;
+          if(!id) return;
+          const next = !expandedRowIds.has(id);
+          if(next) expandedRowIds.add(id);
+          else expandedRowIds.delete(id);
+          tr.classList.toggle("expanded", next);
+          detailsBtn.innerHTML = next ? ICONS.chevronUp : ICONS.chevronDown;
+          detailsBtn.setAttribute("aria-expanded", next ? "true" : "false");
+        }
+      });
+      detailsBtn.setAttribute("aria-expanded", expandedRowIds.has(rowId) ? "true" : "false");
+
+      const dupBtn = makeIconBtn({
+        title: "Duplicate",
+        ariaLabel: "Duplicate row",
+        iconSvg: ICONS.duplicate,
+        onClick: (e) => {
+          e.preventDefault();
+          duplicateRow(rowId);
+        }
+      });
+
+      const delBtn = makeIconBtn({
+        title: "Delete",
+        ariaLabel: "Delete row",
+        iconSvg: ICONS.trash,
+        className: "danger",
+        onClick: (e) => {
+          e.preventDefault();
+          deleteRow(rowId);
+        }
+      });
+
+      actions.appendChild(detailsBtn);
+      actions.appendChild(dupBtn);
+      actions.appendChild(delBtn);
+
+      topRow.appendChild(input);
+      topRow.appendChild(actions);
+
+      wrap.appendChild(topRow);
       wrap.appendChild(hint);
       td.appendChild(wrap);
       return td;
@@ -934,6 +1071,7 @@
     const idx = rows.findIndex(r => r.id === id);
     if(idx < 0) return;
     if(!confirm("Delete this row?")) return;
+    expandedRowIds.delete(id);
     rows.splice(idx, 1);
     scheduleSave();
     render();
@@ -942,6 +1080,7 @@
   function clearAll(){
     if(!confirm("Clear ALL rows? This cannot be undone.")) return;
     rows = [];
+    expandedRowIds.clear();
     scheduleSave();
     render();
   }
