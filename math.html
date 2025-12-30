@@ -352,6 +352,7 @@
   let lastSignature = "";
   let lastContent = "";
   const expandedRowIds = new Set();
+  let pendingFocus = null; // { rowId: string, field: string, selectionStart?: number, selectionEnd?: number }
 
   const $ = (id) => document.getElementById(id);
 
@@ -388,6 +389,8 @@
     btn.title = title;
     btn.setAttribute("aria-label", ariaLabel);
     btn.innerHTML = iconSvg;
+    // Prevent pointer interactions from stealing focus (we manage focus explicitly after re-renders)
+    btn.addEventListener("pointerdown", (e) => e.preventDefault());
     btn.addEventListener("click", onClick);
     return btn;
   }
@@ -816,7 +819,44 @@
     return hay.includes(filterText);
   }
 
+  function getActiveCellState(){
+    const el = document.activeElement;
+    if(!el || !(el instanceof HTMLInputElement)) return null;
+    if(!el.classList.contains("cellInput")) return null;
+    const tr = el.closest("tr");
+    const td = el.closest("td");
+    const rowId = tr?.dataset?.id || null;
+    const field = td?.dataset?.field || null;
+    if(!rowId || !field) return null;
+    return {
+      rowId,
+      field,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+    };
+  }
+
+  function focusCell({ rowId, field, selectionStart = null, selectionEnd = null }){
+    const tr = tbody.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
+    const input = tr?.querySelector(`td[data-field="${CSS.escape(field)}"] input.cellInput`);
+    if(!input) return false;
+    input.focus({ preventScroll: true });
+    try{
+      if(
+        typeof selectionStart === "number" &&
+        typeof selectionEnd === "number" &&
+        typeof input.setSelectionRange === "function"
+      ){
+        input.setSelectionRange(selectionStart, selectionEnd);
+      }
+    }catch(e){
+      // ignore (some input types don't support selection)
+    }
+    return true;
+  }
+
   function render(){
+    const activeCell = getActiveCellState();
     tbody.innerHTML = "";
 
     const shown = rows.filter(passesFilter).sort(compareRowsByDateDesc);
@@ -883,6 +923,15 @@
     } else {
       filterNoteEl.classList.add("hidden");
     }
+
+    // Restore focus after re-render (e.g., after Firebase sync)
+    // If we just added/duplicated, always prefer focusing the new row.
+    if(pendingFocus){
+      const ok = focusCell(pendingFocus);
+      pendingFocus = null;
+      if(ok) return;
+    }
+    if(activeCell) focusCell(activeCell);
   }
 
   function makeCell(field, value, placeholder, label, rowId, locked=false){
@@ -1082,10 +1131,9 @@
     if(targetInput && !targetInput.disabled) targetInput.focus();
   }
 
-  function focusRowFirstEditableCell(rowId){
-    const tr = tbody.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
-    const input = tr?.querySelector("input.cellInput:not(:disabled)");
-    input?.focus();
+  function queueFocusRowDateTimeCell(rowId){
+    // Prefer selecting the "day" portion (YYYY-MM-[DD]THH:MM) since that's commonly edited.
+    pendingFocus = { rowId, field: "date", selectionStart: 8, selectionEnd: 10 };
   }
 
   function addRow(n=1){
@@ -1102,12 +1150,9 @@
       rows.push(next);
       lastAddedId = next.id;
     }
+    if(lastAddedId) queueFocusRowDateTimeCell(lastAddedId);
     scheduleSave();
     render();
-    // focus first cell of last added row (if shown)
-    setTimeout(() => {
-      if(lastAddedId) focusRowFirstEditableCell(lastAddedId);
-    }, 0);
   }
 
   function duplicateRow(id){
@@ -1122,9 +1167,9 @@
     }
     const copy = { ...src, id: uid(), date };
     rows.splice(idx + 1, 0, copy);
+    queueFocusRowDateTimeCell(copy.id);
     scheduleSave();
     render();
-    setTimeout(() => focusRowFirstEditableCell(copy.id), 0);
   }
 
   function deleteRow(id){
@@ -1202,6 +1247,7 @@
   }
 
   // Wire UI
+  $("addRowBtn").addEventListener("pointerdown", (e) => e.preventDefault());
   $("addRowBtn").addEventListener("click", () => addRow(1));
   $("clearBtn").addEventListener("click", () => { setMenuOpen(false); clearAll(); });
   $("printBtn").addEventListener("click", () => { setMenuOpen(false); window.print(); });
