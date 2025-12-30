@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Class Record (Read-only)</title>
+  <!-- Firebase SDKs (optional read-only sync; matches post.html) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+      --btn:#111827; --btn2:#374151; --danger:#b91c1c; --ok:#065f46;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg)}
+    header{padding:20px 16px 10px}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 16px 24px}
+    .titleRow{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+    h1{font-size:20px;margin:0}
+    .sub{color:var(--muted);font-size:13px;margin-top:6px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px}
+    .toolbar .group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button{
+      border:1px solid var(--line);background:#fff;color:var(--ink);
+      padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px
+    }
+    button.secondary{background:var(--btn2);color:#fff;border-color:var(--btn2)}
+    input{
+      border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:#fff;color:var(--ink)
+    }
+    .spacer{flex:1}
+    .small{font-size:12px;color:var(--muted)}
+    .mono{font-family:var(--mono)}
+    .tableWrap{overflow:auto;border-top:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;min-width:980px}
+    thead th{
+      position:sticky;top:0;background:#fafafa;border-bottom:1px solid var(--line);
+      text-align:left;font-weight:600;font-size:12px;color:#374151;padding:10px
+    }
+    tbody td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:top}
+    tbody tr:hover{background:#fcfcff}
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+      background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;color:#374151
+    }
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)} .dot.warn{background:#d97706}
+    .headerRight{display:flex;align-items:center;gap:10px;position:relative}
+    .hamburger{
+      font-size:18px;
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:8px 10px;
+      cursor:pointer;
+      line-height:1;
+    }
+    .menu{
+      display:none;
+      position:fixed;
+      left:50%;
+      top:50%;
+      transform:translate(-50%, -50%);
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      z-index:1000;
+      width:min(92vw, 360px);
+      max-height:80vh;
+      overflow:auto;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+    }
+    .menu.active{display:block}
+    .menu button{display:block;width:100%;text-align:left;margin:6px 0}
+    .menu hr{border:none;border-top:1px solid var(--line);margin:8px 0}
+    .menuBackdrop{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:999;
+    }
+    .menuBackdrop.active{display:block}
+
+    @media (max-width: 720px){
+      header{padding:14px 12px 8px}
+      .wrap{padding:0 12px 18px}
+      .toolbar{gap:8px;padding:10px}
+      button{padding:10px 12px;font-size:14px;border-radius:12px}
+      input{padding:10px 12px;font-size:14px;border-radius:12px}
+      .tableWrap{overflow:visible;border-top:none}
+      table{min-width:0}
+      thead{display:none}
+      tbody, tbody tr, tbody td{display:block;width:100%}
+      tbody tr{
+        margin:12px 0;
+        border:1px solid var(--line);
+        border-radius:12px;
+        background:#fff;
+        overflow:hidden;
+      }
+      tbody td{
+        border:none;
+        border-top:1px solid var(--line);
+        padding:10px 12px;
+      }
+      tbody td:first-child{border-top:none}
+      tbody td::before{
+        content:attr(data-label);
+        display:block;
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:6px;
+      }
+    }
+    @media print{
+      body{background:#fff}
+      header,.toolbar,.noPrint{display:none !important}
+      .wrap{max-width:none;padding:0}
+      .card{border:none;box-shadow:none}
+      thead th{position:static}
+      table{min-width:0}
+    }
+  </style>
+</head>
+<body>
+<header class="wrap">
+  <div class="titleRow">
+    <div>
+      <h1>Class Record (Read-only)</h1>
+      <div class="sub">View-only snapshot (no editing)</div>
+    </div>
+    <div class="headerRight">
+      <div class="pill" id="syncStatus" title="Sync status">
+        <span class="dot warn" id="syncDot"></span>
+        <span id="syncText">Local</span>
+      </div>
+      <button class="hamburger noPrint" id="hamburgerBtn" title="Menu">☰</button>
+      <div class="menuBackdrop noPrint" id="menuBackdrop"></div>
+      <div class="menu noPrint" id="menu">
+        <button class="secondary" id="exportJsonBtn">Export JSON</button>
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="shareBtn" title="Share or copy as CSV">Share CSV</button>
+        <button id="printBtn">Print</button>
+        <hr />
+        <button id="firebaseSetupBtn">Firebase Setup</button>
+        <button id="shareLinkBtn">Share Link</button>
+        <button id="openEditBtn">Open editable page</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <div class="toolbar noPrint">
+      <div class="group">
+        <input id="searchInput" placeholder="Search (any column)…" />
+        <button id="clearSearchBtn">Clear search</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="small">
+        Rows: <span id="rowCount">0</span>
+        <span id="filterNote" style="display:none"> • Showing <span id="shownCount">0</span> (filtered)</span>
+      </div>
+    </div>
+
+    <div class="tableWrap">
+      <table aria-label="Class Record Table (Read-only)">
+        <thead>
+          <tr>
+            <th style="width:210px">Date &amp; Time</th>
+            <th style="width:300px">Content</th>
+            <th style="width:160px">Duration (h:mm)</th>
+            <th style="width:200px">Signature</th>
+            <th style="width:220px">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  /*******************************************
+   * 1. Firebase Initialization (if API Key exists)
+   *******************************************/
+  let firebaseConfigured = false;
+  let db = null;
+
+  function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    var results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+  };
+
+  let apiKeyFromUrl = getUrlParameter('apiKey');
+  let firebaseApiKeyToUse = null;
+
+  if (apiKeyFromUrl) {
+    console.log("Found API key in URL parameter.");
+    firebaseApiKeyToUse = apiKeyFromUrl;
+    // Keep same behavior as post.html / math.html for convenience
+    localStorage.setItem('firebaseApiKey', firebaseApiKeyToUse);
+  } else {
+    firebaseApiKeyToUse = localStorage.getItem('firebaseApiKey');
+    if (firebaseApiKeyToUse) {
+      console.log("Using API key from localStorage.");
+    }
+  }
+
+  if (firebaseApiKeyToUse) {
+    const firebaseConfig = {
+      apiKey: firebaseApiKeyToUse,
+      authDomain: "homeinventory-4718c.firebaseapp.com",
+      projectId: "homeinventory-4718c",
+      storageBucket: "homeinventory-4718c.firebasestorage.app",
+      messagingSenderId: "719884896213",
+      appId: "1:719884896213:web:e93d5dffc79dec10995f5c"
+    };
+    if (window.firebase?.initializeApp && window.firebase?.firestore) {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      firebaseConfigured = true;
+      console.log("Firebase initialized for Class Record (Read-only)");
+    }
+  }
+
+  /*******************************************
+   * 2. Local + Render
+   *******************************************/
+  const STORAGE_KEY = "classRecordForm.v1";
+  let rows = [];
+  let filterText = "";
+
+  const $ = (id) => document.getElementById(id);
+  const tbody = $("tbody");
+  const rowCountEl = $("rowCount");
+  const shownCountEl = $("shownCount");
+  const filterNoteEl = $("filterNote");
+  const syncDot = $("syncDot");
+  const syncText = $("syncText");
+
+  const hamburgerBtn = $("hamburgerBtn");
+  const menu = $("menu");
+  const menuBackdrop = $("menuBackdrop");
+
+  function setSyncStatus(kind){
+    // kind: "local" | "firebase"
+    if(kind === "firebase"){
+      syncDot.className = "dot ok";
+      syncText.textContent = "Firebase";
+    } else {
+      syncDot.className = "dot warn";
+      syncText.textContent = "Local";
+    }
+  }
+
+  function normalize(s){ return (s || "").toString().toLowerCase().trim(); }
+
+  function normalizeDateTimeLocal(v){
+    const s = (v ?? "").toString().trim();
+    if(!s) return "";
+    const isoLike = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?$/);
+    if(isoLike) return `${isoLike[1]}T${isoLike[2]}`;
+    const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+    if(dateOnly) return `${dateOnly[1]}T00:00`;
+    const spaceSeparated = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
+    if(spaceSeparated) return `${spaceSeparated[1]}T${spaceSeparated[2]}`;
+    return s;
+  }
+
+  function parseDateTimeLocalToDate(v){
+    const s = normalizeDateTimeLocal(v);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!m) return null;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const hh = Number(m[4]);
+    const min = Number(m[5]);
+    if(![yyyy, mm, dd, hh, min].every(Number.isFinite)) return null;
+    return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
+  }
+
+  function sanitizeRows(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(x => ({
+      id: (x?.id && typeof x.id === "string") ? x.id : "",
+      date: normalizeDateTimeLocal(x?.date),
+      content: (x?.content ?? "").toString(),
+      duration: (x?.duration ?? "").toString(),
+      signature: (x?.signature ?? "").toString(),
+      notes: (x?.notes ?? "").toString(),
+    }));
+  }
+
+  function passesFilter(row){
+    if(!filterText) return true;
+    const hay = [row.date, row.content, row.duration, row.signature, row.notes]
+      .map(v => normalize(v)).join(" | ");
+    return hay.includes(filterText);
+  }
+
+  function loadLocal(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        rows = sanitizeRows(parsed);
+      }
+    }catch(e){
+      console.warn("Failed to load:", e);
+      rows = [];
+    }
+  }
+
+  function render(){
+    tbody.innerHTML = "";
+    const shown = rows.filter(passesFilter);
+
+    for(const row of shown){
+      const tr = document.createElement("tr");
+
+      const dateTd = document.createElement("td");
+      dateTd.dataset.label = "Date & Time";
+      const d = parseDateTimeLocalToDate(row.date);
+      dateTd.textContent = d ? d.toLocaleString() : (row.date || "");
+      tr.appendChild(dateTd);
+
+      const contentTd = document.createElement("td");
+      contentTd.dataset.label = "Content";
+      contentTd.textContent = row.content || "";
+      tr.appendChild(contentTd);
+
+      const durationTd = document.createElement("td");
+      durationTd.dataset.label = "Duration (h:mm)";
+      durationTd.textContent = row.duration || "";
+      tr.appendChild(durationTd);
+
+      const signatureTd = document.createElement("td");
+      signatureTd.dataset.label = "Signature";
+      signatureTd.textContent = row.signature || "";
+      tr.appendChild(signatureTd);
+
+      const notesTd = document.createElement("td");
+      notesTd.dataset.label = "Notes";
+      notesTd.textContent = row.notes || "";
+      tr.appendChild(notesTd);
+
+      tbody.appendChild(tr);
+    }
+
+    rowCountEl.textContent = rows.length.toString();
+    if(filterText){
+      filterNoteEl.style.display = "";
+      shownCountEl.textContent = shown.length.toString();
+    } else {
+      filterNoteEl.style.display = "none";
+    }
+  }
+
+  function csvEscape(v){
+    const s = (v ?? "").toString();
+    if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  }
+
+  function download(filename, text, mime="text/plain"){
+    const blob = new Blob([text], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 250);
+  }
+
+  function exportJSON(){
+    download("class-record.json", JSON.stringify(rows, null, 2), "application/json");
+  }
+
+  function exportCSV(){
+    const header = ["Date","Content","Duration","Signature","Notes"];
+    const lines = [header.join(",")];
+    for(const r of rows){
+      lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
+    }
+    download("class-record.csv", lines.join("\n"), "text/csv");
+  }
+
+  function buildShareCSV(){
+    const shown = rows.filter(passesFilter);
+    const header = ["Date","Content","Duration","Signature","Notes"];
+    const lines = [header.join(",")];
+    for(const r of shown){
+      lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
+    }
+    return lines.join("\n");
+  }
+
+  async function copyToClipboard(text){
+    try{
+      if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(e){
+      // fall back
+    }
+
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.left = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    }catch(e){
+      return false;
+    }
+  }
+
+  async function shareRecordsAsCSV(){
+    const csv = buildShareCSV();
+    if(!csv.trim()){
+      alert("Nothing to share.");
+      return;
+    }
+
+    if(navigator.share){
+      try{
+        await navigator.share({ title: "class-record.csv", text: csv });
+        return;
+      }catch(e){
+        // user cancelled or not supported in this context; fall back to copy
+      }
+    }
+
+    const copied = await copyToClipboard(csv);
+    if(copied){
+      alert("Copied CSV to clipboard.");
+    } else {
+      alert("Sharing not available here. Please copy manually:\n\n" + csv);
+    }
+  }
+
+  function setMenuOpen(isOpen){
+    menu.classList.toggle('active', isOpen);
+    menuBackdrop.classList.toggle('active', isOpen);
+  }
+
+  hamburgerBtn.addEventListener('click', () => {
+    const open = !menu.classList.contains('active');
+    setMenuOpen(open);
+  });
+  menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+
+  $("exportJsonBtn").addEventListener("click", () => { setMenuOpen(false); exportJSON(); });
+  $("exportCsvBtn").addEventListener("click", () => { setMenuOpen(false); exportCSV(); });
+  $("shareBtn").addEventListener("click", () => { setMenuOpen(false); shareRecordsAsCSV(); });
+  $("printBtn").addEventListener("click", () => { setMenuOpen(false); window.print(); });
+
+  $("firebaseSetupBtn").addEventListener('click', () => {
+    setMenuOpen(false);
+    let apiKey = prompt("Enter your Firebase API Key:");
+    if (apiKey) {
+      localStorage.setItem('firebaseApiKey', apiKey);
+      alert("Firebase API key saved. Please refresh the page to initialize Firebase.");
+    }
+  });
+
+  $("shareLinkBtn").addEventListener('click', () => {
+    setMenuOpen(false);
+    let firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    const baseURL = window.location.href.split("?")[0];
+    let shareURL = firebaseApiKey ? `${baseURL}?apiKey=${encodeURIComponent(firebaseApiKey)}` : baseURL;
+
+    if (navigator.share) {
+      navigator.share({
+        title: 'Class Record (Read-only)',
+        text: 'Read-only class record view',
+        url: shareURL
+      }).catch(() => {});
+    } else {
+      prompt('Copy this link:', shareURL);
+    }
+  });
+
+  $("openEditBtn").addEventListener("click", () => {
+    setMenuOpen(false);
+    const firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    const url = new URL("math.html", window.location.href);
+    url.search = "";
+    if(firebaseApiKey) url.searchParams.set("apiKey", firebaseApiKey);
+    const w = window.open(url.toString(), "_blank", "noopener");
+    if(!w) window.location.href = url.toString();
+  });
+
+  $("searchInput").addEventListener("input", (e) => {
+    filterText = normalize(e.target.value);
+    render();
+  });
+  $("clearSearchBtn").addEventListener("click", () => {
+    $("searchInput").value = "";
+    filterText = "";
+    render();
+  });
+
+  // Init from local
+  loadLocal();
+  setSyncStatus("local");
+  render();
+
+  // Optional realtime read-only sync from Firebase
+  if(firebaseConfigured && db){
+    const docRef = db.collection("classRecordForm").doc("v1");
+    docRef.onSnapshot((doc) => {
+      if(!doc.exists) return;
+      const data = doc.data() || {};
+      if(Array.isArray(data?.rows)){
+        rows = sanitizeRows(data.rows);
+        setSyncStatus("firebase");
+        render();
+      }
+    }, (error) => {
+      console.error("Error in real-time listener:", error);
+      setSyncStatus("local");
+    });
+  }
+})();
+</script>
+</body>
+</html>
+

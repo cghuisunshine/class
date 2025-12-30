@@ -227,6 +227,7 @@
         <hr />
         <button id="firebaseSetupBtn">Firebase Setup</button>
         <button id="shareLinkBtn">Share Link</button>
+        <button id="openReadonlyBtn">Open read-only view</button>
       </div>
     </div>
   </div>
@@ -359,6 +360,7 @@
   const importJsonBtn = $("importJsonBtn");
   const firebaseSetupBtn = $("firebaseSetupBtn");
   const shareLinkBtn = $("shareLinkBtn");
+  const openReadonlyBtn = $("openReadonlyBtn");
 
   const remoteDocRef = (firebaseConfigured && db)
     ? db.collection("classRecordForm").doc("v1")
@@ -688,6 +690,17 @@
   importJsonBtn.addEventListener("click", () => {
     setMenuOpen(false);
     $("importJsonFile")?.click();
+  });
+
+  openReadonlyBtn.addEventListener("click", () => {
+    setMenuOpen(false);
+    const firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    const url = new URL("math_readonly.html", window.location.href);
+    url.search = "";
+    if(firebaseApiKey) url.searchParams.set("apiKey", firebaseApiKey);
+    // Prefer opening a new tab (fallback to same tab if blocked)
+    const w = window.open(url.toString(), "_blank", "noopener");
+    if(!w) window.location.href = url.toString();
   });
 
   firebaseSetupBtn.addEventListener('click', () => {
