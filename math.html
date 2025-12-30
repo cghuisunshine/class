@@ -46,6 +46,14 @@
     }
     tbody td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:top}
     tbody tr:hover{background:#fcfcff}
+    tbody tr.locked{background:#f9fafb}
+    tbody tr.locked:hover{background:#f9fafb}
+    tbody tr.locked .cellInput:not(:focus){
+      background:#f3f4f6;
+      color:var(--muted);
+      -webkit-text-fill-color:var(--muted);
+      opacity:1;
+    }
     .cellInput{
       width:100%;border:1px solid transparent;background:transparent;padding:6px 8px;border-radius:8px;font-size:13px
     }
@@ -467,6 +475,7 @@
       rows = [];
       saveLocalOnly();
     }
+
   }
 
   function save(){
@@ -537,28 +546,31 @@
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
-  function snapTimeTo30Min(v){
-    const s = normalizeTimeHHMM(v);
-    if(!s) return "";
-    const [hhStr, mmStr] = s.split(":");
-    const hh = Number(hhStr);
-    const mm = Number(mmStr);
-    const snappedMinutes = mm < 30 ? 0 : 30;
-    return `${String(hh).padStart(2, "0")}:${String(snappedMinutes).padStart(2, "0")}`;
-  }
-
   function currentTimeHHMM(){
     const d = new Date();
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
   function defaultDateTimeLocal(){
-    const time = lastTime || snapTimeTo30Min(currentTimeHHMM()) || currentTimeHHMM();
-    const d = new Date();
-    const yyyy = String(d.getFullYear());
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}T${time}`;
+    const now = new Date();
+    now.setSeconds(0, 0);
+
+    if(lastTime){
+      const m = lastTime.match(/^(\d{2}):(\d{2})$/);
+      if(m){
+        const hh = Number(m[1]);
+        const min = Number(m[2]);
+        const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, min, 0, 0);
+        if(candidate.getTime() >= now.getTime()) return formatDateTimeLocalFromDate(candidate);
+      }
+    }
+
+    // Round up to the next 30-minute boundary (staying at current minute if already on a boundary)
+    const rounded = new Date(now);
+    const minutes = rounded.getMinutes();
+    const mod = minutes % 30;
+    if(mod !== 0) rounded.setMinutes(minutes + (30 - mod));
+    return formatDateTimeLocalFromDate(rounded);
   }
 
   function setLastTimeFromDateTimeLocal(v){
@@ -601,6 +613,14 @@
     return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
   }
 
+  function compareRowsByDateDesc(a, b){
+    const da = parseDateTimeLocalToDate(a?.date);
+    const db = parseDateTimeLocalToDate(b?.date);
+    const ta = da ? da.getTime() : Number.NEGATIVE_INFINITY;
+    const tb = db ? db.getTime() : Number.NEGATIVE_INFINITY;
+    return tb - ta;
+  }
+
   function formatDateTimeLocalFromDate(d){
     const yyyy = String(d.getFullYear());
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -611,7 +631,7 @@
   }
 
   function buildShareCSV(){
-    const shown = rows.filter(passesFilter);
+    const shown = rows.filter(passesFilter).sort(compareRowsByDateDesc);
     const header = ["Date","Content","Duration","Signature","Notes"];
     const lines = [header.join(",")];
     for(const r of shown){
@@ -737,14 +757,13 @@
 
       if(doc.exists){
         const data = doc.data() || {};
-        if(data?.rows && Array.isArray(data.rows)){
-          applyingRemoteSnapshot = true;
-          rows = sanitizeRows(data.rows).map((r) => ({ ...r, date: normalizeDateTimeLocal(r?.date) }));
-
-          lastDuration = normalizeDuration(data?.lastDuration) || lastDuration;
-          lastTime = normalizeTimeHHMM(data?.lastTime) || lastTime;
-          lastSignature = (data?.lastSignature ?? "").toString().trim() || lastSignature;
-          lastContent = (data?.lastContent ?? "").toString() || lastContent;
+	        if(data?.rows && Array.isArray(data.rows)){
+	          applyingRemoteSnapshot = true;
+	          rows = sanitizeRows(data.rows).map((r) => ({ ...r, date: normalizeDateTimeLocal(r?.date) }));
+	          lastDuration = normalizeDuration(data?.lastDuration) || lastDuration;
+	          lastTime = normalizeTimeHHMM(data?.lastTime) || lastTime;
+	          lastSignature = (data?.lastSignature ?? "").toString().trim() || lastSignature;
+	          lastContent = (data?.lastContent ?? "").toString() || lastContent;
 
           try{ localStorage.setItem(LAST_DURATION_KEY, lastDuration); }catch(e){}
           try{ localStorage.setItem(LAST_TIME_KEY, lastTime); }catch(e){}
@@ -800,18 +819,24 @@
   function render(){
     tbody.innerHTML = "";
 
-    const shown = rows.filter(passesFilter);
+    const shown = rows.filter(passesFilter).sort(compareRowsByDateDesc);
+    const now = new Date();
+    now.setSeconds(0, 0);
+    const nowTs = now.getTime();
 
     for(const row of shown){
       const tr = document.createElement("tr");
       tr.dataset.id = row.id;
+      const rowDate = parseDateTimeLocalToDate(row?.date);
+      const locked = !!rowDate && rowDate.getTime() < nowTs;
+      if(locked) tr.classList.add("locked");
       if(expandedRowIds.has(row.id)) tr.classList.add("expanded");
 
-      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time", row.id));
-      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content", row.id));
-      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)", row.id));
-      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature", row.id));
-      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes", row.id));
+      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time", row.id, locked));
+      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content", row.id, locked));
+      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)", row.id, locked));
+      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature", row.id, locked));
+      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes", row.id, locked));
 
       const tdActions = document.createElement("td");
       tdActions.dataset.field = "actions";
@@ -860,7 +885,7 @@
     }
   }
 
-  function makeCell(field, value, placeholder, label, rowId){
+  function makeCell(field, value, placeholder, label, rowId, locked=false){
     const td = document.createElement("td");
     td.dataset.field = field;
     td.dataset.label = label;
@@ -1041,35 +1066,47 @@
     let targetInput = null;
 
     if(direction === "down"){
-      const nextTr = tr.nextElementSibling;
-      if(nextTr){
+      let nextTr = tr.nextElementSibling;
+      while(nextTr){
         const nextTds = Array.from(nextTr.querySelectorAll("td"));
         const nextTd = nextTds[idx];
-        targetInput = nextTd?.querySelector("input.cellInput");
+        const candidate = nextTd?.querySelector("input.cellInput");
+        if(candidate && !candidate.disabled){
+          targetInput = candidate;
+          break;
+        }
+        nextTr = nextTr.nextElementSibling;
       }
     }
 
-    if(targetInput) targetInput.focus();
+    if(targetInput && !targetInput.disabled) targetInput.focus();
+  }
+
+  function focusRowFirstEditableCell(rowId){
+    const tr = tbody.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
+    const input = tr?.querySelector("input.cellInput:not(:disabled)");
+    input?.focus();
   }
 
   function addRow(n=1){
+    let lastAddedId = null;
     for(let i=0;i<n;i++){
-      rows.push({
+      const next = {
         id: uid(),
         date: defaultDateTimeLocal() || "",
         content: lastContent || "",
         duration: lastDuration || "",
         signature: lastSignature || "",
         notes: ""
-      });
+      };
+      rows.push(next);
+      lastAddedId = next.id;
     }
     scheduleSave();
     render();
-    // focus first cell of last added row (if not filtered)
+    // focus first cell of last added row (if shown)
     setTimeout(() => {
-      const trs = Array.from(tbody.querySelectorAll("tr"));
-      const last = trs[trs.length - 1];
-      last?.querySelector("input.cellInput")?.focus();
+      if(lastAddedId) focusRowFirstEditableCell(lastAddedId);
     }, 0);
   }
 
@@ -1087,6 +1124,7 @@
     rows.splice(idx + 1, 0, copy);
     scheduleSave();
     render();
+    setTimeout(() => focusRowFirstEditableCell(copy.id), 0);
   }
 
   function deleteRow(id){
@@ -1133,7 +1171,7 @@
   function exportCSV(){
     const header = ["Date","Content","Duration","Signature","Notes"];
     const lines = [header.join(",")];
-    for(const r of rows){
+    for(const r of [...rows].sort(compareRowsByDateDesc)){
       lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
     }
     download("class-record.csv", lines.join("\n"), "text/csv");
