@@ -1,0 +1,1586 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>General Class Record (Multi-teacher)</title>
+  <!-- Firebase SDKs (optional sync; uses same setup as post.html) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+      --btn:#111827; --btn2:#374151; --danger:#b91c1c; --ok:#065f46;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg)}
+    header{padding:20px 16px 10px}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 16px 24px}
+    .titleRow{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+    h1{font-size:20px;margin:0}
+    .sub{color:var(--muted);font-size:13px;margin-top:6px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+    .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px}
+    .toolbar .group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button{
+      border:1px solid var(--line);background:#fff;color:var(--ink);
+      padding:8px 10px;border-radius:10px;cursor:pointer;font-size:13px
+    }
+    button.primary{background:var(--btn);color:#fff;border-color:var(--btn)}
+    button.secondary{background:var(--btn2);color:#fff;border-color:var(--btn2)}
+    button.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    input, textarea, select{
+      border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;background:#fff;color:var(--ink)
+    }
+    input[type="file"]{padding:6px}
+    .spacer{flex:1}
+    .small{font-size:12px;color:var(--muted)}
+    .tableWrap{overflow:auto;border-top:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;min-width:980px}
+    thead th{
+      position:sticky;top:0;background:#fafafa;border-bottom:1px solid var(--line);
+      text-align:left;font-weight:600;font-size:12px;color:#374151;padding:10px
+    }
+    tbody td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:top}
+    tbody tr:hover{background:#fcfcff}
+    tbody tr.locked{background:#f9fafb}
+    tbody tr.locked:hover{background:#f9fafb}
+    tbody tr.locked .cellInput:not(:focus){
+      background:#f3f4f6;
+      color:var(--muted);
+      -webkit-text-fill-color:var(--muted);
+      opacity:1;
+    }
+    .cellInput{
+      width:100%;border:1px solid transparent;background:transparent;padding:6px 8px;border-radius:8px;font-size:13px
+    }
+    .cellInput:focus{outline:none;border-color:#c7d2fe;background:#fff}
+    .cellWrap{display:flex;flex-direction:column;gap:6px}
+    .dateHint{font-size:12px;color:var(--muted)}
+    .mono{font-family:var(--mono)}
+    .actions{display:flex;gap:6px;justify-content:flex-end}
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+      background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;color:#374151
+    }
+    .headerRight{display:flex;align-items:center;gap:10px;position:relative}
+    .hamburger{
+      font-size:18px;
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:8px 10px;
+      cursor:pointer;
+      line-height:1;
+    }
+    .menu{
+      display:none;
+      position:fixed;
+      left:50%;
+      top:50%;
+      transform:translate(-50%, -50%);
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      z-index:1000;
+      width:min(92vw, 360px);
+      max-height:80vh;
+      overflow:auto;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
+    }
+    .menu.active{display:block}
+    .menu button{display:block;width:100%;text-align:left;margin:6px 0}
+    .menu hr{border:none;border-top:1px solid var(--line);margin:8px 0}
+    .fileInputHidden{
+      position:fixed;
+      top:-10000px;
+      left:-10000px;
+      width:1px;
+      height:1px;
+      opacity:0;
+    }
+    .menuBackdrop{
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.35);
+      z-index:999;
+    }
+    .menuBackdrop.active{display:block}
+    .detailsToggle{
+      display:none;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .iconBtn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:36px;
+      height:36px;
+      padding:0;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      border-radius:10px;
+      cursor:pointer;
+      flex:0 0 auto;
+    }
+    .iconBtn svg{width:18px;height:18px;display:block}
+    .iconBtn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+    .iconBtn.danger svg{stroke:#fff}
+    .dateTopRow{display:flex;align-items:center;gap:8px}
+    .dateTopRow .cellInput{flex:1;min-width:0}
+    .dateTopActions{display:none;align-items:center;gap:6px}
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)} .dot.warn{background:#d97706}
+    .footer{
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+      padding:12px;border-top:1px solid var(--line)
+    }
+    .hidden{display:none !important}
+    @media (max-width: 720px){
+      header{padding:14px 12px 8px}
+      .wrap{padding:0 12px 18px}
+      .toolbar{gap:8px;padding:10px}
+      button{padding:10px 12px;font-size:14px;border-radius:12px}
+      input, textarea, select{padding:10px 12px;font-size:14px;border-radius:12px}
+      input[type="file"]{padding:8px}
+      .tableWrap{overflow:visible;border-top:none}
+      table{min-width:0}
+      thead{display:none}
+      tbody, tbody tr, tbody td{display:block;width:100%}
+      tbody tr{
+        margin:12px 0;
+        border:1px solid var(--line);
+        border-radius:12px;
+        background:#fff;
+        overflow:hidden;
+      }
+      tbody td{
+        border:none;
+        border-top:1px solid var(--line);
+        padding:10px 12px;
+      }
+      tbody td:first-child{border-top:none}
+      tbody td::before{
+        content:attr(data-label);
+        display:block;
+        font-size:12px;
+        color:var(--muted);
+        margin-bottom:6px;
+      }
+      .cellInput{
+        border:1px solid var(--line);
+        background:#fff;
+        padding:10px 12px;
+        font-size:15px;
+      }
+      .cellWrap{gap:8px}
+      .dateHint{font-size:13px}
+      .actions{justify-content:flex-start}
+      .actions button{flex:1}
+      .iconBtn{width:32px;height:32px;border-radius:12px}
+      .dateTopRow{gap:6px}
+      .dateTopActions{gap:4px}
+
+      /* Mobile folding: show only Date & Time (and Actions) by default */
+      tbody tr:not(.expanded) td[data-field]{display:none}
+      tbody tr:not(.expanded) td[data-field="date"]{display:block}
+      td[data-field="actions"]{display:none}
+      .dateTopActions{display:flex}
+    }
+    @media print{
+      body{background:#fff}
+      header,.toolbar,.footer,.noPrint{display:none !important}
+      .wrap{max-width:none;padding:0}
+      .card{border:none;box-shadow:none}
+      thead th{position:static}
+      table{min-width:0}
+      .cellInput{border:none;padding:0}
+      .actions{display:none}
+    }
+  </style>
+</head>
+<body>
+<header class="wrap">
+  <div class="titleRow">
+    <div>
+      <h1>General Class Record</h1>
+
+    </div>
+    <div class="headerRight">
+      <div class="pill" id="saveStatus" title="Local autosave status">
+        <span class="dot ok" id="saveDot"></span>
+        <span id="saveText">Saved</span>
+      </div>
+      <button class="hamburger noPrint" id="hamburgerBtn" title="Menu">☰</button>
+      <div class="menuBackdrop noPrint" id="menuBackdrop"></div>
+      <div class="menu noPrint" id="menu">
+        <button class="danger" id="clearBtn" title="Clears current teacher rows">Clear all</button>
+        <button id="exportJsonBtn">Export JSON</button>
+        <button id="exportAllJsonBtn">Export ALL JSON</button>
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="shareBtn" title="Share or copy as CSV">Share CSV</button>
+        <button id="importJsonBtn">Import JSON…</button>
+        <button id="printBtn">Print</button>
+        <hr />
+        <button id="firebaseSetupBtn">Firebase Setup</button>
+        <button id="shareLinkBtn">Share Link</button>
+        <button id="openReadonlyBtn">Open read-only view</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <div class="toolbar noPrint">
+      <div class="group">
+        <button class="primary" id="addRowBtn" type="button">+ Add row</button>
+        <select id="teacherSelect" title="Teacher"></select>
+        <button id="addTeacherBtn" type="button" title="Add a teacher">+ Teacher</button>
+        <button id="renameTeacherBtn" type="button" title="Rename selected teacher">Rename</button>
+        <button class="danger" id="deleteTeacherBtn" type="button" title="Delete selected teacher">Delete</button>
+        <input id="teacherNameInline" class="hidden" placeholder="Teacher name" />
+        <button id="teacherNameSaveBtn" type="button" class="hidden">Save</button>
+        <button id="teacherNameCancelBtn" type="button" class="hidden">Cancel</button>
+        <span class="small" id="teacherActionNote"></span>
+      </div>
+
+      <div class="group">
+        <input id="searchInput" placeholder="Search (any column)…" />
+        <button id="clearSearchBtn">Clear search</button>
+      </div>
+
+      <div class="spacer"></div>
+    </div>
+
+    <div class="tableWrap">
+      <table aria-label="Class Record Table">
+        <thead>
+          <tr>
+            <th style="width:210px">Date &amp; Time</th>
+            <th style="width:300px">Content</th>
+            <th style="width:160px">Duration (h:mm)</th>
+            <th style="width:200px">Signature</th>
+            <th style="width:220px">Notes</th>
+            <th style="width:110px;text-align:right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <div class="small">
+        Rows: <span id="rowCount">0</span>
+        <span id="filterNote" class="hidden"> • Showing <span id="shownCount">0</span> (filtered)</span>
+      </div>
+      <div class="small">
+        Tip: click any cell to edit • Enter to move down • Tab to move right
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  /*******************************************
+   * 1. Firebase Initialization (if API Key exists)
+   *******************************************/
+  let firebaseConfigured = false;
+  let db = null;
+  let remoteSeen = false;
+  let applyingRemoteSnapshot = false;
+
+  // Function to get URL parameters
+  function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    var results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+  };
+
+  // 1. Check for API key in URL parameter first
+  let apiKeyFromUrl = getUrlParameter('apiKey');
+  let firebaseApiKeyToUse = null;
+
+  if (apiKeyFromUrl) {
+    console.log("Found API key in URL parameter.");
+    firebaseApiKeyToUse = apiKeyFromUrl;
+    localStorage.setItem('firebaseApiKey', firebaseApiKeyToUse);
+  } else {
+    firebaseApiKeyToUse = localStorage.getItem('firebaseApiKey');
+    if (firebaseApiKeyToUse) {
+      console.log("Using API key from localStorage.");
+    }
+  }
+
+  // 3. Initialize Firebase if we have an API key
+  if (firebaseApiKeyToUse) {
+    const firebaseConfig = {
+      apiKey: firebaseApiKeyToUse,
+      authDomain: "homeinventory-4718c.firebaseapp.com",
+      projectId: "homeinventory-4718c",
+      storageBucket: "homeinventory-4718c.firebasestorage.app",
+      messagingSenderId: "719884896213",
+      appId: "1:719884896213:web:e93d5dffc79dec10995f5c"
+    };
+
+    if (window.firebase?.initializeApp && window.firebase?.firestore) {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      firebaseConfigured = true;
+      console.log("Firebase initialized for General Class Record (Multi-teacher)");
+    } else {
+      console.warn("Firebase API key found, but Firebase SDK didn't load; running without sync.");
+    }
+  }
+
+  const STORAGE_KEY = "classRecordMultiTeacher.v1";
+  const LEGACY_ROWS_KEY = "classRecordForm.v1";
+  const LEGACY_LAST_DURATION_KEY = "classRecordForm.v1.lastDuration";
+  const LEGACY_LAST_TIME_KEY = "classRecordForm.v1.lastTime";
+  const LEGACY_LAST_SIGNATURE_KEY = "classRecordForm.v1.lastSignature";
+  const LEGACY_LAST_CONTENT_KEY = "classRecordForm.v1.lastContent";
+
+  /** @type {Array<{id:string, date:string, content:string, duration:string, signature:string, notes:string}>} */
+  let rows = [];
+  let filterText = "";
+  let lastDuration = "";
+  let lastTime = "";
+  let lastSignature = "";
+  let lastContent = "";
+  /** @type {Array<{id:string, name:string}>} */
+  let teachers = [];
+  /** @type {string} */
+  let selectedTeacherId = "";
+  /** @type {Record<string, {rows: Array<{id:string, date:string, content:string, duration:string, signature:string, notes:string}>, lastDuration:string, lastTime:string, lastSignature:string, lastContent:string}>} */
+  let byTeacher = {};
+  /** @type {null | { mode: "create" | "rename", teacherId: string }} */
+  let teacherEdit = null;
+  const expandedRowIds = new Set();
+  let pendingFocus = null; // { rowId: string, field: string, selectionStart?: number, selectionEnd?: number }
+
+  const $ = (id) => document.getElementById(id);
+
+  const tbody = $("tbody");
+  const rowCountEl = $("rowCount");
+  const shownCountEl = $("shownCount");
+  const filterNoteEl = $("filterNote");
+
+  const saveDot = $("saveDot");
+  const saveText = $("saveText");
+  const hamburgerBtn = $("hamburgerBtn");
+  const menu = $("menu");
+  const menuBackdrop = $("menuBackdrop");
+  const importJsonBtn = $("importJsonBtn");
+  const exportAllJsonBtn = $("exportAllJsonBtn");
+  const firebaseSetupBtn = $("firebaseSetupBtn");
+  const shareLinkBtn = $("shareLinkBtn");
+  const openReadonlyBtn = $("openReadonlyBtn");
+
+  const teacherSelect = $("teacherSelect");
+  const addTeacherBtn = $("addTeacherBtn");
+  const renameTeacherBtn = $("renameTeacherBtn");
+  const deleteTeacherBtn = $("deleteTeacherBtn");
+  const teacherNameInline = $("teacherNameInline");
+  const teacherNameSaveBtn = $("teacherNameSaveBtn");
+  const teacherNameCancelBtn = $("teacherNameCancelBtn");
+  const teacherActionNote = $("teacherActionNote");
+
+  const remoteDocRef = (firebaseConfigured && db)
+    ? db.collection("classRecordMultiTeacher").doc("v1")
+    : null;
+
+  const ICONS = {
+    chevronDown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+    chevronUp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>',
+    duplicate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+  };
+
+  function makeIconBtn({ title, ariaLabel, iconSvg, className = "", onClick }){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `iconBtn ${className}`.trim();
+    btn.title = title;
+    btn.setAttribute("aria-label", ariaLabel);
+    btn.innerHTML = iconSvg;
+    // Prevent pointer interactions from stealing focus (we manage focus explicitly after re-renders)
+    btn.addEventListener("pointerdown", (e) => e.preventDefault());
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  function sanitizeRows(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(x => ({
+      id: (x?.id && typeof x.id === "string") ? x.id : uid(),
+      date: normalizeDateTimeLocal(x?.date),
+      content: (x?.content ?? "").toString(),
+      duration: (x?.duration ?? "").toString(),
+      signature: (x?.signature ?? "").toString(),
+      notes: (x?.notes ?? "").toString(),
+    }));
+  }
+
+  function uid(prefix="r"){
+    // good-enough unique id for local storage
+    return `${prefix}_` + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  }
+
+  function setSaveStatus(state){
+    // state: "saved" | "dirty"
+    if(state === "dirty"){
+      saveDot.className = "dot warn";
+      saveText.textContent = "Unsaved…";
+    } else {
+      saveDot.className = "dot ok";
+      saveText.textContent = "Saved";
+    }
+  }
+
+  function sanitizeTeachers(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map((t, idx) => ({
+      id: (t?.id && typeof t.id === "string") ? t.id : uid("t"),
+      name: ((t?.name ?? "").toString().trim() || `Teacher ${idx + 1}`),
+    }));
+  }
+
+  function ensureTeacherData(teacherId){
+    if(!teacherId) return null;
+    if(!byTeacher[teacherId]){
+      byTeacher[teacherId] = { rows: [], lastDuration: "", lastTime: "", lastSignature: "", lastContent: "" };
+    }
+    return byTeacher[teacherId];
+  }
+
+  function bindSelectedTeacher(){
+    const t = teachers.find(x => x.id === selectedTeacherId) ?? teachers[0] ?? null;
+    if(!t){
+      const created = { id: uid("t"), name: "Teacher 1" };
+      teachers = [created];
+      selectedTeacherId = created.id;
+    } else {
+      selectedTeacherId = t.id;
+    }
+
+    const d = ensureTeacherData(selectedTeacherId);
+    rows = d.rows;
+    lastDuration = d.lastDuration;
+    lastTime = d.lastTime;
+    lastSignature = d.lastSignature;
+    lastContent = d.lastContent;
+  }
+
+  function persistSelectedTeacher(){
+    const d = ensureTeacherData(selectedTeacherId);
+    if(!d) return;
+    d.rows = rows;
+    d.lastDuration = lastDuration;
+    d.lastTime = lastTime;
+    d.lastSignature = lastSignature;
+    d.lastContent = lastContent;
+  }
+
+  function teacherNameById(id){
+    return teachers.find(t => t.id === id)?.name ?? "Teacher";
+  }
+
+  function renderTeacherControls(){
+    teacherSelect.innerHTML = "";
+    for(const t of teachers){
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.name;
+      teacherSelect.appendChild(opt);
+    }
+    teacherSelect.value = selectedTeacherId || (teachers[0]?.id ?? "");
+    const editing = !!teacherEdit;
+    teacherSelect.disabled = editing || teachers.length <= 1;
+    addTeacherBtn.disabled = editing;
+    renameTeacherBtn.disabled = editing || teachers.length === 0;
+    deleteTeacherBtn.disabled = editing || teachers.length <= 1;
+
+    teacherNameInline.classList.toggle("hidden", !editing);
+    teacherNameSaveBtn.classList.toggle("hidden", !editing);
+    teacherNameCancelBtn.classList.toggle("hidden", !editing);
+    teacherNameInline.style.display = editing ? "" : "none";
+    teacherNameSaveBtn.style.display = editing ? "" : "none";
+    teacherNameCancelBtn.style.display = editing ? "" : "none";
+  }
+
+  function safeFilenamePart(name){
+    const s = (name ?? "").toString().trim().toLowerCase();
+    const cleaned = s.replace(/[^a-z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    return cleaned || "teacher";
+  }
+
+  function switchTeacher(nextTeacherId){
+    if(!nextTeacherId) return;
+    if(nextTeacherId === selectedTeacherId) return;
+    if(teacherEdit) return;
+    persistSelectedTeacher();
+    selectedTeacherId = nextTeacherId;
+    bindSelectedTeacher();
+    expandedRowIds.clear();
+    pendingFocus = null;
+    scheduleSave();
+    render();
+  }
+
+  function openTeacherInlineEditor(mode, teacherId){
+    const t = teachers.find(x => x.id === teacherId);
+    if(!t) return;
+    teacherEdit = { mode, teacherId };
+    teacherNameInline.value = t.name;
+    if(teacherActionNote) teacherActionNote.textContent = (mode === "create") ? "Rename new teacher →" : "Rename teacher →";
+    renderTeacherControls();
+    setTimeout(() => {
+      teacherNameInline.focus();
+      teacherNameInline.select();
+    }, 0);
+  }
+
+  function closeTeacherInlineEditor(){
+    teacherEdit = null;
+    teacherNameInline.value = "";
+    if(teacherActionNote) teacherActionNote.textContent = "";
+    renderTeacherControls();
+  }
+
+  function commitTeacherInlineEditor(){
+    if(!teacherEdit) return;
+    const t = teachers.find(x => x.id === teacherEdit.teacherId);
+    if(!t) return closeTeacherInlineEditor();
+    const trimmed = (teacherNameInline.value ?? "").toString().trim();
+    if(!trimmed){
+      alert("Teacher name cannot be empty.");
+      teacherNameInline.focus();
+      return;
+    }
+    t.name = trimmed;
+    if(teacherActionNote) teacherActionNote.textContent = "Saved.";
+    closeTeacherInlineEditor();
+    scheduleSave();
+    render();
+  }
+
+  function sanitizeByTeacher(obj){
+    const res = {};
+    for(const t of teachers){
+      const d = (obj && typeof obj === "object") ? obj[t.id] : null;
+      res[t.id] = {
+        rows: sanitizeRows(d?.rows),
+        lastDuration: normalizeDuration(d?.lastDuration) || "",
+        lastTime: normalizeTimeHHMM(d?.lastTime) || "",
+        lastSignature: (d?.lastSignature ?? "").toString().trim(),
+        lastContent: (d?.lastContent ?? "").toString(),
+      };
+    }
+    return res;
+  }
+
+  function saveLocalOnly(){
+    try{
+      persistSelectedTeacher();
+      const payload = JSON.stringify({
+        version: 1,
+        teachers,
+        selectedTeacherId,
+        byTeacher
+      });
+      localStorage.setItem(STORAGE_KEY, payload);
+      setSaveStatus("saved");
+    }catch(e){
+      console.error("Failed to save:", e);
+    }
+  }
+
+  function load(){
+    let loaded = false;
+
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        const parsed = JSON.parse(raw);
+        if(parsed && typeof parsed === "object" && !Array.isArray(parsed)){
+          teachers = sanitizeTeachers(parsed?.teachers);
+          selectedTeacherId = (typeof parsed?.selectedTeacherId === "string") ? parsed.selectedTeacherId : "";
+          byTeacher = sanitizeByTeacher(parsed?.byTeacher);
+          loaded = true;
+        }
+      }
+    }catch(e){
+      console.warn("Failed to load multi-teacher state:", e);
+    }
+
+    if(!loaded){
+      // Legacy import: pull from `math.html` keys into a single teacher.
+      let legacyRows = [];
+      try{
+        const raw = localStorage.getItem(LEGACY_ROWS_KEY);
+        if(raw){
+          const parsed = JSON.parse(raw);
+          if(Array.isArray(parsed)) legacyRows = parsed;
+        }
+      }catch(e){
+        // ignore
+      }
+
+      try{ lastDuration = normalizeDuration(localStorage.getItem(LEGACY_LAST_DURATION_KEY)); }catch(e){}
+      try{ lastTime = normalizeTimeHHMM(localStorage.getItem(LEGACY_LAST_TIME_KEY)); }catch(e){}
+      try{ lastSignature = (localStorage.getItem(LEGACY_LAST_SIGNATURE_KEY) ?? "").toString().trim(); }catch(e){}
+      try{ lastContent = (localStorage.getItem(LEGACY_LAST_CONTENT_KEY) ?? "").toString(); }catch(e){}
+
+      const t = { id: uid("t"), name: "Teacher 1" };
+      teachers = [t];
+      selectedTeacherId = t.id;
+      byTeacher = {
+        [t.id]: {
+          rows: sanitizeRows(legacyRows),
+          lastDuration: normalizeDuration(lastDuration) || "",
+          lastTime: normalizeTimeHHMM(lastTime) || "",
+          lastSignature: (lastSignature ?? "").toString().trim(),
+          lastContent: (lastContent ?? "").toString(),
+        }
+      };
+    }
+
+    if(teachers.length === 0){
+      const t = { id: uid("t"), name: "Teacher 1" };
+      teachers = [t];
+      selectedTeacherId = t.id;
+      byTeacher = { [t.id]: { rows: [], lastDuration: "", lastTime: "", lastSignature: "", lastContent: "" } };
+    }
+
+    if(!teachers.some(t => t.id === selectedTeacherId)){
+      selectedTeacherId = teachers[0].id;
+    }
+
+    byTeacher = sanitizeByTeacher(byTeacher);
+    bindSelectedTeacher();
+
+    // Ensure active rows are normalized
+    rows = sanitizeRows(rows);
+    byTeacher[selectedTeacherId].rows = rows;
+
+    if(rows.length === 0){
+      rows = [];
+      byTeacher[selectedTeacherId].rows = rows;
+      saveLocalOnly();
+    }
+  }
+
+  function save(){
+    saveLocalOnly();
+
+    if(firebaseConfigured && db && remoteDocRef && remoteSeen && !applyingRemoteSnapshot){
+      remoteDocRef.set({
+        version: 1,
+        teachers,
+        selectedTeacherId,
+        byTeacher,
+        updatedAt: new Date().toISOString()
+      }).catch((error) => {
+        console.error("Failed to save to Firebase:", error);
+      });
+    }
+  }
+
+  let saveTimer = null;
+  function scheduleSave(){
+    setSaveStatus("dirty");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(save, 300);
+  }
+
+  function setLastDuration(v){
+    const normalized = normalizeDuration(v);
+    if(!/^(\d+):([0-5]\d)$/.test(normalized)) return;
+    lastDuration = normalized;
+    persistSelectedTeacher();
+  }
+
+  function setLastSignature(v){
+    lastSignature = (v ?? "").toString().trim();
+    persistSelectedTeacher();
+  }
+
+  function setLastContent(v){
+    lastContent = (v ?? "").toString();
+    persistSelectedTeacher();
+  }
+
+  function normalize(s){ return (s || "").toString().toLowerCase().trim(); }
+
+  function normalizeTimeHHMM(v){
+    const s = (v ?? "").toString().trim();
+    if(!s) return "";
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    if(!m) return "";
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if(!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return "";
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  function currentTimeHHMM(){
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  function defaultDateTimeLocal(){
+    const now = new Date();
+    now.setSeconds(0, 0);
+
+    if(lastTime){
+      const m = lastTime.match(/^(\d{2}):(\d{2})$/);
+      if(m){
+        const hh = Number(m[1]);
+        const min = Number(m[2]);
+        const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, min, 0, 0);
+        if(candidate.getTime() >= now.getTime()) return formatDateTimeLocalFromDate(candidate);
+      }
+    }
+
+    // Round up to the next 30-minute boundary (staying at current minute if already on a boundary)
+    const rounded = new Date(now);
+    const minutes = rounded.getMinutes();
+    const mod = minutes % 30;
+    if(mod !== 0) rounded.setMinutes(minutes + (30 - mod));
+    return formatDateTimeLocalFromDate(rounded);
+  }
+
+  function setLastTimeFromDateTimeLocal(v){
+    const s = normalizeDateTimeLocal(v);
+    const m = s.match(/^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2})$/);
+    if(!m) return;
+    const normalized = normalizeTimeHHMM(m[1]);
+    if(!normalized) return;
+    lastTime = normalized;
+    persistSelectedTeacher();
+  }
+
+  function normalizeDateTimeLocal(v){
+    const s = (v ?? "").toString().trim();
+    if(!s) return "";
+    // datetime-local expects "YYYY-MM-DDTHH:MM" (optionally with seconds); keep minutes only
+    const isoLike = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?$/);
+    if(isoLike) return `${isoLike[1]}T${isoLike[2]}`;
+    // ISO with timezone (Z or ±hh:mm): convert to local "YYYY-MM-DDTHH:MM"
+    const isoTz = s.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/);
+    if(isoTz){
+      const d = new Date(s);
+      if(Number.isFinite(d.getTime())) return formatDateTimeLocalFromDate(d);
+    }
+    const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+    if(dateOnly) return `${dateOnly[1]}T00:00`;
+    const spaceSeparated = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
+    if(spaceSeparated) return `${spaceSeparated[1]}T${spaceSeparated[2]}`;
+    return s; // keep as-is for best effort; rendering will fall back to text input
+  }
+
+  function parseDateTimeLocalToDate(v){
+    const s = normalizeDateTimeLocal(v);
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if(!m) return null;
+    const yyyy = Number(m[1]);
+    const mm = Number(m[2]);
+    const dd = Number(m[3]);
+    const hh = Number(m[4]);
+    const min = Number(m[5]);
+    if(![yyyy, mm, dd, hh, min].every(Number.isFinite)) return null;
+    return new Date(yyyy, mm - 1, dd, hh, min, 0, 0);
+  }
+
+  function compareRowsByDateDesc(a, b){
+    const da = parseDateTimeLocalToDate(a?.date);
+    const db = parseDateTimeLocalToDate(b?.date);
+    const ta = da ? da.getTime() : Number.NEGATIVE_INFINITY;
+    const tb = db ? db.getTime() : Number.NEGATIVE_INFINITY;
+    return tb - ta;
+  }
+
+  function formatDateTimeLocalFromDate(d){
+    const yyyy = String(d.getFullYear());
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  }
+
+  function buildShareCSV(){
+    const shown = rows.filter(passesFilter).sort(compareRowsByDateDesc);
+    const header = ["Date","Content","Duration","Signature","Notes"];
+    const lines = [header.join(",")];
+    for(const r of shown){
+      lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
+    }
+    return lines.join("\n");
+  }
+
+  async function copyToClipboard(text){
+    try{
+      if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(e){
+      // fall back
+    }
+
+    try{
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      ta.style.left = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    }catch(e){
+      return false;
+    }
+  }
+
+  async function shareRecordsAsCSV(){
+    const csv = buildShareCSV();
+    if(!csv.trim()){
+      alert("Nothing to share.");
+      return;
+    }
+
+    if(navigator.share){
+      try{
+        await navigator.share({ title: "class-record.csv", text: csv });
+        return;
+      }catch(e){
+        // user cancelled or not supported in this context; fall back to copy
+      }
+    }
+
+    const copied = await copyToClipboard(csv);
+    if(copied){
+      alert("Copied CSV to clipboard.");
+    } else {
+      alert("Sharing not available here. Please copy manually:\n\n" + csv);
+    }
+  }
+
+  /*******************************************
+   * 2. Firebase UI + Realtime Sync
+   *******************************************/
+  function setMenuOpen(isOpen){
+    menu.classList.toggle('active', isOpen);
+    menuBackdrop.classList.toggle('active', isOpen);
+  }
+
+  hamburgerBtn.addEventListener('click', () => {
+    const open = !menu.classList.contains('active');
+    setMenuOpen(open);
+  });
+
+  menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+
+  importJsonBtn.addEventListener("click", () => {
+    setMenuOpen(false);
+    $("importJsonFile")?.click();
+  });
+
+  openReadonlyBtn.addEventListener("click", () => {
+    setMenuOpen(false);
+    const firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    const url = new URL("general_class_readonly.html", window.location.href);
+    url.search = "";
+    if(firebaseApiKey) url.searchParams.set("apiKey", firebaseApiKey);
+    // Prefer opening a new tab (fallback to same tab if blocked)
+    const w = window.open(url.toString(), "_blank", "noopener");
+    if(!w) window.location.href = url.toString();
+  });
+
+  firebaseSetupBtn.addEventListener('click', () => {
+    let apiKey = prompt("Enter your Firebase API Key:");
+    if (apiKey) {
+      localStorage.setItem('firebaseApiKey', apiKey);
+      alert("Firebase API key saved. Please refresh the page to initialize Firebase.");
+    }
+    setMenuOpen(false);
+  });
+
+  // Share link functionality: share the page link with the firebase API key as a parameter (if available)
+  shareLinkBtn.addEventListener('click', () => {
+    let firebaseApiKey = localStorage.getItem('firebaseApiKey') || '';
+    let baseURL = window.location.origin + window.location.pathname;
+    let shareURL = firebaseApiKey ? `${baseURL}?apiKey=${encodeURIComponent(firebaseApiKey)}` : baseURL;
+
+    if (navigator.share) {
+      navigator.share({
+        title: 'General Class Record (Multi-teacher)',
+        text: 'General class record form (multi-teacher)',
+        url: shareURL
+      }).then(() => console.log('Share successful'))
+      .catch(error => console.error('Error sharing:', error));
+    } else {
+      prompt('Copy this link:', shareURL);
+    }
+    setMenuOpen(false);
+  });
+
+  if(firebaseConfigured && db && remoteDocRef){
+    remoteDocRef.onSnapshot((doc) => {
+      remoteSeen = true;
+
+      if(doc.exists){
+        const data = doc.data() || {};
+        const hasMultiTeacher = Array.isArray(data?.teachers) && data?.byTeacher && typeof data.byTeacher === "object";
+        const hasLegacyRows = Array.isArray(data?.rows);
+
+        if(hasMultiTeacher){
+          applyingRemoteSnapshot = true;
+          teachers = sanitizeTeachers(data.teachers);
+          selectedTeacherId = (typeof data?.selectedTeacherId === "string") ? data.selectedTeacherId : "";
+          byTeacher = sanitizeByTeacher(data.byTeacher);
+          bindSelectedTeacher();
+          saveLocalOnly();
+          render();
+          applyingRemoteSnapshot = false;
+          console.log("Multi-teacher records loaded/updated from Firebase in real-time");
+        } else if(hasLegacyRows){
+          // Backward-compatible: remote doc stores a single rows array; attach to current selected teacher.
+          applyingRemoteSnapshot = true;
+          if(teachers.length === 0){
+            const t = { id: uid("t"), name: "Teacher 1" };
+            teachers = [t];
+            selectedTeacherId = t.id;
+            byTeacher = {};
+          }
+          bindSelectedTeacher();
+          rows = sanitizeRows(data.rows);
+          lastDuration = normalizeDuration(data?.lastDuration) || lastDuration;
+          lastTime = normalizeTimeHHMM(data?.lastTime) || lastTime;
+          lastSignature = (data?.lastSignature ?? "").toString().trim() || lastSignature;
+          lastContent = (data?.lastContent ?? "").toString() || lastContent;
+          persistSelectedTeacher();
+          saveLocalOnly();
+          render();
+          applyingRemoteSnapshot = false;
+          console.log("Legacy records loaded/updated from Firebase in real-time");
+        }
+      } else {
+        // Seed Firestore once from local data if remote doc doesn't exist yet
+        if(!applyingRemoteSnapshot && (teachers.length > 0)){
+          remoteDocRef.set({
+            version: 1,
+            teachers,
+            selectedTeacherId,
+            byTeacher,
+            updatedAt: new Date().toISOString()
+          }).catch((error) => console.error("Failed to initialize Firebase doc:", error));
+        }
+      }
+    }, (error) => {
+      console.error("Error in real-time listener:", error);
+      remoteSeen = true;
+    });
+  } else {
+    remoteSeen = true;
+  }
+
+  function normalizeDuration(v){
+    const s = (v ?? "").toString().trim();
+    if(!s) return "";
+    const hoursOnly = s.match(/^(\d+)$/);
+    if(hoursOnly) return `${Number(hoursOnly[1])}:00`;
+    const m = s.match(/^(\d+):(\d{1,2})$/);
+    if(!m) return s;
+    const hours = Number(m[1]);
+    const minutes = Number(m[2]);
+    if(!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) return s;
+    return `${hours}:${String(minutes).padStart(2, "0")}`;
+  }
+
+  function passesFilter(row){
+    if(!filterText) return true;
+    const hay = [row.date, row.content, row.duration, row.signature, row.notes]
+      .map(v => normalize(v)).join(" | ");
+    return hay.includes(filterText);
+  }
+
+  function getActiveCellState(){
+    const el = document.activeElement;
+    if(!el || !(el instanceof HTMLInputElement)) return null;
+    if(!el.classList.contains("cellInput")) return null;
+    const tr = el.closest("tr");
+    const td = el.closest("td");
+    const rowId = tr?.dataset?.id || null;
+    const field = td?.dataset?.field || null;
+    if(!rowId || !field) return null;
+    return {
+      rowId,
+      field,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+    };
+  }
+
+  function focusCell({ rowId, field, selectionStart = null, selectionEnd = null }){
+    const tr = tbody.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
+    const input = tr?.querySelector(`td[data-field="${CSS.escape(field)}"] input.cellInput`);
+    if(!input) return false;
+    input.focus({ preventScroll: true });
+    try{
+      if(
+        typeof selectionStart === "number" &&
+        typeof selectionEnd === "number" &&
+        typeof input.setSelectionRange === "function"
+      ){
+        input.setSelectionRange(selectionStart, selectionEnd);
+      }
+    }catch(e){
+      // ignore (some input types don't support selection)
+    }
+    return true;
+  }
+
+  function render(){
+    renderTeacherControls();
+    const activeCell = getActiveCellState();
+    tbody.innerHTML = "";
+
+    const shown = rows.filter(passesFilter).sort(compareRowsByDateDesc);
+    const now = new Date();
+    now.setSeconds(0, 0);
+    const nowTs = now.getTime();
+
+    for(const row of shown){
+      const tr = document.createElement("tr");
+      tr.dataset.id = row.id;
+      const rowDate = parseDateTimeLocalToDate(row?.date);
+      const locked = !!rowDate && rowDate.getTime() < nowTs;
+      if(locked) tr.classList.add("locked");
+      if(expandedRowIds.has(row.id)) tr.classList.add("expanded");
+
+      tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time", row.id, locked));
+      tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content", row.id, locked));
+      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)", row.id, locked));
+      tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature", row.id, locked));
+      tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes", row.id, locked));
+
+      const tdActions = document.createElement("td");
+      tdActions.dataset.field = "actions";
+      tdActions.style.textAlign = "right";
+      tdActions.className = "noPrint";
+      tdActions.dataset.label = "Actions";
+
+      const wrap = document.createElement("div");
+      wrap.className = "actions";
+
+      const dupBtn = makeIconBtn({
+        title: "Duplicate",
+        ariaLabel: "Duplicate row",
+        iconSvg: ICONS.duplicate,
+        onClick: (e) => {
+          e.preventDefault();
+          duplicateRow(row.id);
+        }
+      });
+
+      const delBtn = makeIconBtn({
+        title: "Delete",
+        ariaLabel: "Delete row",
+        iconSvg: ICONS.trash,
+        className: "danger",
+        onClick: (e) => {
+          e.preventDefault();
+          deleteRow(row.id);
+        }
+      });
+
+      wrap.appendChild(dupBtn);
+      wrap.appendChild(delBtn);
+      tdActions.appendChild(wrap);
+      tr.appendChild(tdActions);
+
+      tbody.appendChild(tr);
+    }
+
+    rowCountEl.textContent = rows.length.toString();
+    if(filterText){
+      filterNoteEl.classList.remove("hidden");
+      shownCountEl.textContent = shown.length.toString();
+    } else {
+      filterNoteEl.classList.add("hidden");
+    }
+
+    // Restore focus after re-render (e.g., after Firebase sync)
+    // If we just added/duplicated, always prefer focusing the new row.
+    if(pendingFocus){
+      const ok = focusCell(pendingFocus);
+      pendingFocus = null;
+      if(ok) return;
+    }
+    if(activeCell) focusCell(activeCell);
+  }
+
+  function makeCell(field, value, placeholder, label, rowId, locked=false){
+    const td = document.createElement("td");
+    td.dataset.field = field;
+    td.dataset.label = label;
+    const input = document.createElement("input");
+    input.className = "cellInput";
+    input.value = value ?? "";
+    input.placeholder = placeholder;
+    input.setAttribute("aria-label", label);
+    input.autocomplete = "off";
+    input.spellcheck = false;
+
+    if(field === "date"){
+      const wrap = document.createElement("div");
+      wrap.className = "cellWrap";
+      const topRow = document.createElement("div");
+      topRow.className = "dateTopRow";
+      const hint = document.createElement("div");
+      hint.className = "dateHint";
+
+      const updateHint = () => {
+        const d = parseDateTimeLocalToDate(input.value);
+        hint.textContent = d ? d.toLocaleDateString(undefined, { weekday: "short" }) : "";
+      };
+
+      const normalized = normalizeDateTimeLocal(input.value);
+      const probe = document.createElement("input");
+      probe.type = "datetime-local";
+      const supported = probe.type === "datetime-local";
+
+      if(supported){
+        input.type = "datetime-local";
+        input.step = "1800";
+        if(normalized === "" || /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/.test(normalized)){
+          input.value = normalized;
+        } else {
+          // If the stored value isn't compatible with datetime-local, fall back to text so it's still editable.
+          input.type = "text";
+          input.value = (value ?? "").toString();
+        }
+      }
+
+      input.addEventListener("blur", (e) => {
+        setLastTimeFromDateTimeLocal(e.target.value);
+        updateHint();
+      });
+      input.addEventListener("input", updateHint);
+      updateHint();
+
+      const actions = document.createElement("div");
+      actions.className = "dateTopActions noPrint";
+
+      const detailsBtn = makeIconBtn({
+        title: "Show/Hide details",
+        ariaLabel: "Show or hide details",
+        iconSvg: expandedRowIds.has(rowId) ? ICONS.chevronUp : ICONS.chevronDown,
+        onClick: (e) => {
+          e.preventDefault();
+          const tr = e.target.closest("tr");
+          const id = tr?.dataset?.id;
+          if(!id) return;
+          const next = !expandedRowIds.has(id);
+          if(next) expandedRowIds.add(id);
+          else expandedRowIds.delete(id);
+          tr.classList.toggle("expanded", next);
+          detailsBtn.innerHTML = next ? ICONS.chevronUp : ICONS.chevronDown;
+          detailsBtn.setAttribute("aria-expanded", next ? "true" : "false");
+        }
+      });
+      detailsBtn.setAttribute("aria-expanded", expandedRowIds.has(rowId) ? "true" : "false");
+
+      const dupBtn = makeIconBtn({
+        title: "Duplicate",
+        ariaLabel: "Duplicate row",
+        iconSvg: ICONS.duplicate,
+        onClick: (e) => {
+          e.preventDefault();
+          duplicateRow(rowId);
+        }
+      });
+
+      const delBtn = makeIconBtn({
+        title: "Delete",
+        ariaLabel: "Delete row",
+        iconSvg: ICONS.trash,
+        className: "danger",
+        onClick: (e) => {
+          e.preventDefault();
+          deleteRow(rowId);
+        }
+      });
+
+      actions.appendChild(detailsBtn);
+      actions.appendChild(dupBtn);
+      actions.appendChild(delBtn);
+
+      topRow.appendChild(input);
+      topRow.appendChild(actions);
+
+      wrap.appendChild(topRow);
+      wrap.appendChild(hint);
+      td.appendChild(wrap);
+      return td;
+    }
+
+    if(field === "duration"){
+      input.type = "text";
+      input.inputMode = "numeric";
+      input.autocapitalize = "off";
+      input.list = "durationList";
+
+      input.addEventListener("blur", (e) => {
+        const tr = e.target.closest("tr");
+        const id = tr?.dataset?.id;
+        const r = rows.find(x => x.id === id);
+        if(!r) return;
+        const normalized = normalizeDuration(e.target.value);
+        if(normalized !== e.target.value){
+          e.target.value = normalized;
+          r[field] = normalized;
+          scheduleSave();
+        }
+        setLastDuration(e.target.value);
+      });
+    }
+
+    if(field === "content"){
+      input.addEventListener("blur", (e) => {
+        setLastContent(e.target.value);
+      });
+    }
+
+    if(field === "signature"){
+      input.addEventListener("blur", (e) => {
+        setLastSignature(e.target.value);
+      });
+    }
+
+    // keep edits in data model
+    input.addEventListener("input", (e) => {
+      const tr = e.target.closest("tr");
+      const id = tr.dataset.id;
+      const r = rows.find(x => x.id === id);
+      if(!r) return;
+      r[field] = e.target.value;
+      scheduleSave();
+
+      if(field === "date"){
+        setLastTimeFromDateTimeLocal(e.target.value);
+      }
+      if(field === "content"){
+        lastContent = (e.target.value ?? "").toString();
+      }
+      if(field === "signature"){
+        lastSignature = (e.target.value ?? "").toString().trim();
+      }
+    });
+
+    // keyboard navigation (Enter moves down)
+    input.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){
+        e.preventDefault();
+        focusNextCell(input, "down");
+      }
+    });
+
+    td.appendChild(input);
+    return td;
+  }
+
+  function focusNextCell(currentInput, direction){
+    const td = currentInput.closest("td");
+    const tr = currentInput.closest("tr");
+    if(!td || !tr) return;
+
+    const tds = Array.from(tr.querySelectorAll("td"));
+    const idx = tds.indexOf(td);
+
+    let targetInput = null;
+
+    if(direction === "down"){
+      let nextTr = tr.nextElementSibling;
+      while(nextTr){
+        const nextTds = Array.from(nextTr.querySelectorAll("td"));
+        const nextTd = nextTds[idx];
+        const candidate = nextTd?.querySelector("input.cellInput");
+        if(candidate && !candidate.disabled){
+          targetInput = candidate;
+          break;
+        }
+        nextTr = nextTr.nextElementSibling;
+      }
+    }
+
+    if(targetInput && !targetInput.disabled) targetInput.focus();
+  }
+
+  function queueFocusRowDateTimeCell(rowId){
+    // Prefer selecting the "day" portion (YYYY-MM-[DD]THH:MM) since that's commonly edited.
+    pendingFocus = { rowId, field: "date", selectionStart: 8, selectionEnd: 10 };
+  }
+
+  function syncRowFromDom(rowId){
+    const tr = tbody.querySelector(`tr[data-id="${CSS.escape(rowId)}"]`);
+    if(!tr) return;
+    const r = rows.find(x => x.id === rowId);
+    if(!r) return;
+    const dateEl = tr.querySelector('td[data-field="date"] input.cellInput');
+    const contentEl = tr.querySelector('td[data-field="content"] input.cellInput');
+    const durationEl = tr.querySelector('td[data-field="duration"] input.cellInput');
+    const signatureEl = tr.querySelector('td[data-field="signature"] input.cellInput');
+    const notesEl = tr.querySelector('td[data-field="notes"] input.cellInput');
+    if(dateEl) r.date = dateEl.value;
+    if(contentEl) r.content = contentEl.value;
+    if(durationEl) r.duration = normalizeDuration(durationEl.value);
+    if(signatureEl) r.signature = signatureEl.value;
+    if(notesEl) r.notes = notesEl.value;
+  }
+
+  function addRow(n=1){
+    let lastAddedId = null;
+    for(let i=0;i<n;i++){
+      const next = {
+        id: uid(),
+        date: defaultDateTimeLocal() || "",
+        content: lastContent || "",
+        duration: lastDuration || "",
+        signature: lastSignature || "",
+        notes: ""
+      };
+      rows.push(next);
+      lastAddedId = next.id;
+    }
+    if(lastAddedId) queueFocusRowDateTimeCell(lastAddedId);
+    scheduleSave();
+    render();
+  }
+
+  function duplicateRow(id){
+    // Ensure we duplicate what you currently see/edited in the row (some browsers don't emit `input` events for datetime-local).
+    syncRowFromDom(id);
+    const idx = rows.findIndex(r => r.id === id);
+    if(idx < 0) return;
+    const src = rows[idx];
+    let date = src.date;
+    const d = parseDateTimeLocalToDate(src.date);
+    if(d){
+      d.setDate(d.getDate() + 7);
+      date = formatDateTimeLocalFromDate(d);
+    }
+    const copy = { ...src, id: uid(), date };
+    rows.splice(idx + 1, 0, copy);
+    queueFocusRowDateTimeCell(copy.id);
+    scheduleSave();
+    render();
+  }
+
+  function deleteRow(id){
+    const idx = rows.findIndex(r => r.id === id);
+    if(idx < 0) return;
+    if(!confirm("Delete this row?")) return;
+    expandedRowIds.delete(id);
+    rows.splice(idx, 1);
+    scheduleSave();
+    render();
+  }
+
+  function clearAll(){
+    if(!confirm(`Clear ALL rows for "${teacherNameById(selectedTeacherId)}"? This cannot be undone.`)) return;
+    rows = [];
+    ensureTeacherData(selectedTeacherId).rows = rows;
+    expandedRowIds.clear();
+    scheduleSave();
+    render();
+  }
+
+  function download(filename, text, mime="text/plain"){
+    const blob = new Blob([text], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 250);
+  }
+
+  function exportJSON(){
+    const payload = JSON.stringify(rows, null, 2);
+    download(`class-record-${safeFilenamePart(teacherNameById(selectedTeacherId))}.json`, payload, "application/json");
+  }
+
+  function exportAllJSON(){
+    persistSelectedTeacher();
+    const payload = JSON.stringify({
+      version: 1,
+      teachers,
+      selectedTeacherId,
+      byTeacher
+    }, null, 2);
+    download("class-record-all.json", payload, "application/json");
+  }
+
+  function csvEscape(v){
+    const s = (v ?? "").toString();
+    if(/[",\n]/.test(s)) return `"${s.replace(/"/g,'""')}"`;
+    return s;
+  }
+
+  function exportCSV(){
+    const header = ["Date","Content","Duration","Signature","Notes"];
+    const lines = [header.join(",")];
+    for(const r of [...rows].sort(compareRowsByDateDesc)){
+      lines.push([r.date,r.content,r.duration,r.signature,r.notes].map(csvEscape).join(","));
+    }
+    download(`class-record-${safeFilenamePart(teacherNameById(selectedTeacherId))}.csv`, lines.join("\n"), "text/csv");
+  }
+
+  function importJSONFile(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const parsed = JSON.parse(reader.result);
+        if(!Array.isArray(parsed)) throw new Error("JSON must be an array of rows");
+        rows = sanitizeRows(parsed);
+        ensureTeacherData(selectedTeacherId).rows = rows;
+        scheduleSave();
+        render();
+      }catch(e){
+        alert("Import failed: " + e.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Wire UI
+  $("addRowBtn").addEventListener("pointerdown", (e) => e.preventDefault());
+  $("addRowBtn").addEventListener("click", () => addRow(1));
+  $("clearBtn").addEventListener("click", () => { setMenuOpen(false); clearAll(); });
+  $("printBtn").addEventListener("click", () => { setMenuOpen(false); window.print(); });
+
+  $("exportJsonBtn").addEventListener("click", () => { setMenuOpen(false); exportJSON(); });
+  exportAllJsonBtn.addEventListener("click", () => { setMenuOpen(false); exportAllJSON(); });
+  $("exportCsvBtn").addEventListener("click", () => { setMenuOpen(false); exportCSV(); });
+  $("shareBtn").addEventListener("click", () => { setMenuOpen(false); shareRecordsAsCSV(); });
+
+  function wireImportJsonFile(){
+    const el = $("importJsonFile");
+    if(!el) return false;
+    el.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if(file) importJSONFile(file);
+      e.target.value = ""; // allow re-import same file
+    });
+    return true;
+  }
+  // In some browsers, elements after <script> aren't available yet; wire now or on DOMContentLoaded.
+  if(!wireImportJsonFile()){
+    window.addEventListener("DOMContentLoaded", () => { wireImportJsonFile(); }, { once: true });
+  }
+
+  $("searchInput").addEventListener("input", (e) => {
+    filterText = normalize(e.target.value);
+    render();
+  });
+  $("clearSearchBtn").addEventListener("click", () => {
+    $("searchInput").value = "";
+    filterText = "";
+    render();
+  });
+
+  teacherSelect.addEventListener("change", (e) => {
+    const nextId = e.target.value;
+    switchTeacher(nextId);
+  });
+
+  addTeacherBtn.addEventListener("click", () => {
+    if(teacherEdit) return;
+    const t = { id: uid("t"), name: `Teacher ${teachers.length + 1}` };
+    teachers.push(t);
+    ensureTeacherData(t.id);
+    switchTeacher(t.id);
+    openTeacherInlineEditor("create", t.id);
+  });
+
+  renameTeacherBtn.addEventListener("click", () => {
+    if(teacherEdit) return;
+    const t = teachers.find(x => x.id === selectedTeacherId);
+    if(!t) return;
+    openTeacherInlineEditor("rename", t.id);
+  });
+
+  teacherNameSaveBtn.addEventListener("click", () => commitTeacherInlineEditor());
+  teacherNameCancelBtn.addEventListener("click", () => closeTeacherInlineEditor());
+  teacherNameInline.addEventListener("keydown", (e) => {
+    if(e.key === "Enter"){
+      e.preventDefault();
+      commitTeacherInlineEditor();
+    } else if(e.key === "Escape"){
+      e.preventDefault();
+      closeTeacherInlineEditor();
+    }
+  });
+
+  deleteTeacherBtn.addEventListener("click", () => {
+    if(teachers.length <= 1){
+      alert("You must keep at least 1 teacher.");
+      return;
+    }
+    if(teacherEdit) return;
+    const t = teachers.find(x => x.id === selectedTeacherId);
+    if(!t) return;
+    if(!confirm(`Delete teacher "${t.name}" and all their rows?`)) return;
+    persistSelectedTeacher();
+    teachers = teachers.filter(x => x.id !== t.id);
+    delete byTeacher[t.id];
+    selectedTeacherId = teachers[0]?.id ?? "";
+    bindSelectedTeacher();
+    expandedRowIds.clear();
+    pendingFocus = null;
+    scheduleSave();
+    render();
+  });
+
+  // Init
+  load();
+  render();
+  setSaveStatus("saved");
+})();
+</script>
+
+<input type="file" id="importJsonFile" accept="application/json" class="fileInputHidden noPrint" />
+
+<datalist id="durationList">
+  <option value="0:30"></option>
+  <option value="1:00"></option>
+  <option value="1:30"></option>
+  <option value="2:00"></option>
+  <option value="2:30"></option>
+  <option value="3:00"></option>
+</datalist>
+</body>
+</html>
