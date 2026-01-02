@@ -780,12 +780,6 @@
     // datetime-local expects "YYYY-MM-DDTHH:MM" (optionally with seconds); keep minutes only
     const isoLike = s.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2})?(?:\.\d+)?$/);
     if(isoLike) return `${isoLike[1]}T${isoLike[2]}`;
-    // ISO with timezone (Z or ±hh:mm): convert to local "YYYY-MM-DDTHH:MM"
-    const isoTz = s.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/);
-    if(isoTz){
-      const d = new Date(s);
-      if(Number.isFinite(d.getTime())) return formatDateTimeLocalFromDate(d);
-    }
     const dateOnly = s.match(/^(\d{4}-\d{2}-\d{2})$/);
     if(dateOnly) return `${dateOnly[1]}T00:00`;
     const spaceSeparated = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/);
