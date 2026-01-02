@@ -1006,14 +1006,59 @@
   function normalizeDuration(v){
     const s = (v ?? "").toString().trim();
     if(!s) return "";
-    const hoursOnly = s.match(/^(\d+)$/);
-    if(hoursOnly) return `${Number(hoursOnly[1])}:00`;
-    const m = s.match(/^(\d+):(\d{1,2})$/);
-    if(!m) return s;
-    const hours = Number(m[1]);
-    const minutes = Number(m[2]);
-    if(!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) return s;
-    return `${hours}:${String(minutes).padStart(2, "0")}`;
+
+    // h:mm
+    const mColon = s.match(/^(\d+):(\d{1,2})$/);
+    if(mColon){
+      const hours = Number(mColon[1]);
+      const minutes = Number(mColon[2]);
+      if(!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) return s;
+      return `${hours}:${String(minutes).padStart(2, "0")}`;
+    }
+
+    // Decimal hours: 1.5 -> 1:30 (also accept comma)
+    const mDecimal = s.match(/^(\d+)\s*[.,]\s*(\d+)$/);
+    if(mDecimal){
+      const hoursPart = Number(mDecimal[1]);
+      const frac = Number(`0.${mDecimal[2]}`);
+      if(!Number.isFinite(hoursPart) || !Number.isFinite(frac)) return s;
+      const totalMinutes = Math.round((hoursPart + frac) * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${hours}:${String(minutes).padStart(2, "0")}`;
+    }
+
+    // Digits-only shortcuts:
+    // - 1..4 => 1:00..4:00
+    // - 130 => 1:30 (hmm / hhmm)
+    // - 90 => 1:30 (total minutes, only when >= 60)
+    const mDigits = s.match(/^(\d+)$/);
+    if(mDigits){
+      const raw = mDigits[1];
+      const n = Number(raw);
+      if(!Number.isFinite(n)) return s;
+
+      if(raw.length <= 2){
+        if(n >= 1 && n <= 4) return `${n}:00`;
+        if(n >= 60){
+          const hours = Math.floor(n / 60);
+          const minutes = n % 60;
+          return `${hours}:${String(minutes).padStart(2, "0")}`;
+        }
+        return s;
+      }
+
+      if(raw.length === 3 || raw.length === 4){
+        const hours = Number(raw.slice(0, -2));
+        const minutes = Number(raw.slice(-2));
+        if(!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) return s;
+        return `${hours}:${String(minutes).padStart(2, "0")}`;
+      }
+
+      return s;
+    }
+
+    return s;
   }
 
   function passesFilter(row){
@@ -1079,7 +1124,7 @@
 
       tr.appendChild(makeCell("date", row.date, "Pick date & time", "Date & Time", row.id, locked));
       tr.appendChild(makeCell("content", row.content, "Topic / pages / homework", "Content", row.id, locked));
-      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30", "Duration (h:mm)", row.id, locked));
+      tr.appendChild(makeCell("duration", row.duration, "e.g., 1:30, 130, 1.5", "Duration (h:mm)", row.id, locked));
       tr.appendChild(makeCell("signature", row.signature, "Name / initials", "Signature", row.id, locked));
       tr.appendChild(makeCell("notes", row.notes, "Payment / comments", "Notes", row.id, locked));
 
@@ -1247,7 +1292,8 @@
     if(field === "duration"){
       input.type = "text";
       // iPhone/iPad numeric keypad doesn't offer ":" so duration (h:mm) becomes hard to enter.
-      input.inputMode = IS_IOS ? "text" : "numeric";
+      // Use a numeric keyboard on iOS and support shorthand inputs like 130 -> 1:30.
+      input.inputMode = IS_IOS ? "decimal" : "numeric";
       input.autocapitalize = "off";
       input.setAttribute("autocorrect", "off");
       input.list = "durationList";
@@ -1576,12 +1622,13 @@
 <input type="file" id="importJsonFile" accept="application/json" class="fileInputHidden noPrint" />
 
 <datalist id="durationList">
-  <option value="0:30"></option>
   <option value="1:00"></option>
   <option value="1:30"></option>
   <option value="2:00"></option>
   <option value="2:30"></option>
   <option value="3:00"></option>
+  <option value="3:30"></option>
+  <option value="4:00"></option>
 </datalist>
 </body>
 </html>
